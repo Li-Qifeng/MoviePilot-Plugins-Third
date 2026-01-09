@@ -11,5 +11,17 @@
       "v2.0.0": "重构整理代码。",
       "v2.0.1": "搜索资源时清理上一次搜索的缓存"
     }
+  },
+  "nullbr_search_pro": {
+    "name": "Nullbr资源搜索Pro",
+    "description": "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载",
+    "labels": "资源,CloudDrive2,115",
+    "version": "1.0.0",
+    "icon": "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png",
+    "author": "Li-Qifeng",
+    "level": 1,
+    "history": {
+      "v1.0.0": "初始版本，基于nullbr_search重构，新增CloudDrive2支持（115转存/磁力离线/ED2K离线）"
+    }
   }
 }
