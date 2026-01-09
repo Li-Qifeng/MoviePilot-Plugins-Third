@@ -70,6 +70,9 @@ https://github.com/Li-Qifeng/MoviePilot-Plugins-Third
 
 ## 📝 更新日志
 
+### Pro版 v1.4.1
+- 修复Protobuf版本兼容问题，使用protobuf 5.x重新生成gRPC代码
+
 ### Pro版 v1.4.0
 - 使用原生gRPC协议重写客户端，完全兼容CloudDrive2官方API
 - 新增 grpcio 依赖
