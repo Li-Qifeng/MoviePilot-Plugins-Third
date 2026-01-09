@@ -193,14 +193,35 @@ class CloudDrive2Client:
         
         logger.info(f"CloudDrive2 添加分享链接转存: {share_url[:50]}... -> {to_folder}")
         
-        result = self._request('/api/AddSharedLink', {
+        # CloudDrive2 使用 gRPC-Web 风格端点
+        # 尝试多个可能的端点路径
+        endpoints = [
+            '/api/fs/115/AddSharedLink',
+            '/api/FileOperation/AddSharedLink',
+            '/api/AddSharedLink'
+        ]
+        
+        payload = {
             'sharedLinkUrl': share_url,
             'sharedPassword': password,
             'toFolder': to_folder
-        })
+        }
         
-        logger.info("CloudDrive2 分享链接转存请求已发送")
-        return result
+        last_error = None
+        for endpoint in endpoints:
+            try:
+                result = self._request(endpoint, payload)
+                logger.info(f"CloudDrive2 分享链接转存请求已发送 (端点: {endpoint})")
+                return result
+            except Exception as e:
+                last_error = e
+                if '405' in str(e) or '404' in str(e):
+                    logger.debug(f"端点 {endpoint} 不可用，尝试下一个...")
+                    continue
+                raise
+        
+        # 所有端点都失败
+        raise last_error
     
     def add_offline_files(self, urls: str, 
                           to_folder: str = "/115/Offline") -> dict:
@@ -225,14 +246,33 @@ class CloudDrive2Client:
         
         logger.info(f"CloudDrive2 添加{link_type}离线任务: {urls[:50]}... -> {to_folder}")
         
-        result = self._request('/api/AddOfflineFiles', {
+        # CloudDrive2 使用 gRPC-Web 风格端点
+        endpoints = [
+            '/api/fs/115/AddOfflineFiles',
+            '/api/FileOperation/AddOfflineFiles', 
+            '/api/AddOfflineFiles'
+        ]
+        
+        payload = {
             'urls': urls,
             'toFolder': to_folder,
             'checkFolderAfterSecs': 0
-        })
+        }
         
-        logger.info("CloudDrive2 离线任务请求已发送")
-        return result
+        last_error = None
+        for endpoint in endpoints:
+            try:
+                result = self._request(endpoint, payload)
+                logger.info(f"CloudDrive2 离线任务请求已发送 (端点: {endpoint})")
+                return result
+            except Exception as e:
+                last_error = e
+                if '405' in str(e) or '404' in str(e):
+                    logger.debug(f"端点 {endpoint} 不可用，尝试下一个...")
+                    continue
+                raise
+        
+        raise last_error
     
     def get_offline_status(self, path: str = "/115/Offline", 
                            force_refresh: bool = True) -> dict:

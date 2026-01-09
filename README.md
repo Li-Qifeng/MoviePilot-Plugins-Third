@@ -70,6 +70,9 @@ https://github.com/Li-Qifeng/MoviePilot-Plugins-Third
 
 ## 📝 更新日志
 
+### Pro版 v1.2.0
+- 修复API 405错误，添加端点自动回退机制兼容不同版本CloudDrive2
+
 ### Pro版 v1.1.0
 - 优化CloudDrive2认证，支持API Token（推荐）和用户名密码双重认证方式
 

@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.1.0"
+    plugin_version = "1.2.0"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
