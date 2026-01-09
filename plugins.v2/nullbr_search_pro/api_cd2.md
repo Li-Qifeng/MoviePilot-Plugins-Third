@@ -1,35 +1,49 @@
-# CloudDrive2 gRPC-Web API Reference
+# CloudDrive2 gRPC API Reference
 
-基于官方 gRPC API 文档，使用 gRPC-Web 协议通过 HTTP/JSON 调用。
+基于官方 gRPC API 文档。
 
 ## 基本说明
 
-- **Base URL**: `http://localhost:19798` (或自定义端口)
-- **协议**: gRPC-Web (HTTP/JSON)
-- **端点格式**: `/{服务名}/{方法名}`
-- **请求方法**: POST
-- **Content-Type**: `application/json`
-- **认证**: `Authorization: Bearer <token>`
+- **协议**: gRPC (HTTP/2 + Protocol Buffers)
+- **默认端口**: 19798
+- **认证**: Bearer Token (JWT)
+
+## 依赖
+
+```bash
+pip install grpcio
+```
+
+## Proto 文件
+
+下载地址: https://www.clouddrive2.com/api/clouddrive.proto
+
+生成 Python 代码:
+```bash
+pip install grpcio-tools
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. clouddrive.proto
+```
+
+---
 
 ## 认证
 
-### 获取 Token (登录)
-- **服务**: `UserSrv`
+### GetToken (登录)
+- **服务**: `CloudDriveFileSrv`
 - **方法**: `GetToken`
-- **端点**: `/UserSrv/GetToken`
 
-```json
-// 请求
-{
-  "userName": "admin",
-  "password": "password",
-  "totpCode": ""
+```protobuf
+message GetTokenRequest {
+  string userName = 1;
+  string password = 2;
+  optional string totpCode = 3;
 }
 
-// 响应
-{
-  "token": "eyJh...",
-  "expiration": "..."
+message TokenResult {
+  bool success = 1;
+  string token = 2;
+  string expiration = 3;
+  string errorMessage = 4;
 }
 ```
 
@@ -42,7 +56,6 @@
 
 - **服务**: `CloudDriveFileSrv`
 - **方法**: `AddSharedLink`
-- **端点**: `/CloudDriveFileSrv/AddSharedLink`
 
 ```protobuf
 message AddSharedLinkRequest {
@@ -53,27 +66,15 @@ message AddSharedLinkRequest {
 // 响应: google.protobuf.Empty
 ```
 
-```json
-// 请求示例
-{
-  "sharedLinkUrl": "https://115.com/s/xxx",
-  "sharedPassword": "",
-  "toFolder": "/115/Downloads"
-}
-
-// 响应: {} (空对象表示成功)
-```
-
 ---
 
-## 离线下载管理
+## 离线下载
 
 ### AddOfflineFiles
 添加离线下载任务(磁力链接、ED2K等)。
 
 - **服务**: `CloudDriveFileSrv`
 - **方法**: `AddOfflineFiles`
-- **端点**: `/CloudDriveFileSrv/AddOfflineFiles`
 
 ```protobuf
 message AddOfflineFileRequest {
@@ -84,111 +85,20 @@ message AddOfflineFileRequest {
 // 响应: FileOperationResult
 ```
 
-```json
-// 请求示例
-{
-  "urls": "magnet:?xt=urn:btih:...",
-  "toFolder": "/115/Offline",
-  "checkFolderAfterSecs": 0
-}
-```
-
 ### ListOfflineFilesByPath
 列出特定路径中的离线文件。
 
 - **服务**: `CloudDriveFileSrv`
 - **方法**: `ListOfflineFilesByPath`
-- **端点**: `/CloudDriveFileSrv/ListOfflineFilesByPath`
-
-```json
-// 请求
-{
-  "path": "/115/Offline",
-  "forceRefresh": true
-}
-
-// 响应
-{
-  "offlineFiles": [...],
-  "status": {...}
-}
-```
-
-### ListAllOfflineFiles
-分页列出所有离线文件。
-
-- **服务**: `CloudDriveFileSrv`
-- **方法**: `ListAllOfflineFiles`
-- **端点**: `/CloudDriveFileSrv/ListAllOfflineFiles`
 
 ```protobuf
-message OfflineFileListAllRequest {
-  string cloudName = 1;
-  string cloudAccountId = 2;
-  uint32 page = 3;
-  optional string path = 4;
-}
-```
-
-### RemoveOfflineFiles
-删除离线下载任务。
-
-- **服务**: `CloudDriveFileSrv`
-- **方法**: `RemoveOfflineFiles`
-- **端点**: `/CloudDriveFileSrv/RemoveOfflineFiles`
-
-```protobuf
-message RemoveOfflineFilesRequest {
-  string cloudName = 1;
-  string cloudAccountId = 2;
-  bool deleteFiles = 3;
-  repeated string infoHashes = 4;
-  optional string path = 5;
-}
-```
-
-### GetOfflineQuotaInfo
-获取离线下载配额信息。
-
-- **服务**: `CloudDriveFileSrv`
-- **方法**: `GetOfflineQuotaInfo`
-- **端点**: `/CloudDriveFileSrv/GetOfflineQuotaInfo`
-
-```protobuf
-message OfflineQuotaRequest {
-  string cloudName = 1;
-  string cloudAccountId = 2;
-  optional string path = 3;
+message FileRequest {
+  string path = 1;
 }
 
-// 响应
-message OfflineQuotaInfo {
-  int32 total = 1;
-  int32 used = 2;
-  int32 left = 3;
-}
-```
-
-### ClearOfflineFiles
-按筛选类型清除离线下载。
-
-- **服务**: `CloudDriveFileSrv`
-- **方法**: `ClearOfflineFiles`
-- **端点**: `/CloudDriveFileSrv/ClearOfflineFiles`
-
-```protobuf
-message ClearOfflineFileRequest {
-  enum Filter {
-    All = 0;
-    Finished = 1;
-    Error = 2;
-    Downloading = 3;
-  }
-  string cloudName = 1;
-  string cloudAccountId = 2;
-  Filter filter = 3;
-  bool deleteFiles = 4;
-  optional string path = 5;
+message OfflineFileListResult {
+  repeated OfflineFile offlineFiles = 1;
+  OfflineStatus status = 2;
 }
 ```
 
@@ -197,27 +107,77 @@ message ClearOfflineFileRequest {
 ## 系统信息
 
 ### GetSystemInfo
-获取系统信息。
+获取系统信息（无需认证）。
 
 - **服务**: `CloudDriveSystemSrv`
 - **方法**: `GetSystemInfo`
-- **端点**: `/CloudDriveSystemSrv/GetSystemInfo`
+
+```protobuf
+// 请求: google.protobuf.Empty
+
+message CloudDriveSystemInfo {
+  bool SystemReady = 1;
+  string UserName = 2;
+  string Version = 3;
+  // ...
+}
+```
 
 ---
 
-## 其他服务
+## Python 示例
 
-CloudDrive2 提供以下服务：
-- `CloudDriveFileSrv` - 文件操作
-- `CloudDriveSystemSrv` - 系统管理
-- `CloudDriveMountSrv` - 挂载点管理
-- `CloudDriveTransferSrv` - 传输任务
-- `CloudDriveCloudAPISrv` - 云API管理
-- `UserSrv` - 用户认证
+```python
+import grpc
+import clouddrive_pb2
+import clouddrive_pb2_grpc
+
+# 连接
+channel = grpc.insecure_channel('localhost:19798')
+stub = clouddrive_pb2_grpc.CloudDriveFileSrvStub(channel)
+
+# 登录
+request = clouddrive_pb2.GetTokenRequest(
+    userName='admin',
+    password='password'
+)
+response = stub.GetToken(request)
+token = response.token
+
+# 创建认证元数据
+metadata = [('authorization', f'Bearer {token}')]
+
+# 添加分享链接
+request = clouddrive_pb2.AddSharedLinkRequest(
+    sharedLinkUrl='https://115.com/s/xxx',
+    toFolder='/115/Downloads'
+)
+stub.AddSharedLink(request, metadata=metadata)
+
+# 添加离线任务
+request = clouddrive_pb2.AddOfflineFileRequest(
+    urls='magnet:?xt=urn:btih:...',
+    toFolder='/115/Offline'
+)
+stub.AddOfflineFiles(request, metadata=metadata)
+
+# 关闭
+channel.close()
+```
+
+## 服务列表
+
+| 服务名 | 说明 |
+|--------|------|
+| CloudDriveFileSrv | 文件操作（100+ 方法） |
+| CloudDriveSystemSrv | 系统管理 |
+| CloudDriveMountSrv | 挂载点管理 |
+| CloudDriveTransferSrv | 传输任务 |
+| CloudDriveCloudAPISrv | 云API管理 |
 
 ## 注意事项
 
-1. 所有请求使用 POST 方法
-2. 空响应 `{}` 表示操作成功 (google.protobuf.Empty)
-3. Token 过期后需要重新登录获取
-4. 推荐使用 API Token 方式认证
+1. gRPC 使用 HTTP/2 协议
+2. 需要使用 `grpc.insecure_channel()` 连接（如需 TLS 使用 `grpc.secure_channel()`）
+3. 所有需要授权的方法需要传递 `metadata=[('authorization', f'Bearer {token}')]`
+4. 空响应表示操作成功 (google.protobuf.Empty)

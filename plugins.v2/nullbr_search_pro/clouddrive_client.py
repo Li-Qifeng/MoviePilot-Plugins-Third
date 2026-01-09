@@ -1,24 +1,29 @@
 """
-CloudDrive2 API 客户端
+CloudDrive2 gRPC 客户端
 
 支持功能：
 - 115分享链接转存
 - 磁力/ED2K离线任务
 - 任务状态查询
 
-使用 gRPC-Web 协议与 CloudDrive2 通信
+使用 gRPC 协议与 CloudDrive2 通信
 """
-import requests
-import time
-import json
-from typing import Optional, Dict
+import grpc
+from typing import Optional
 from app.log import logger
+
+# 导入生成的 gRPC 代码
+try:
+    from . import clouddrive_pb2
+    from . import clouddrive_pb2_grpc
+except ImportError:
+    import clouddrive_pb2
+    import clouddrive_pb2_grpc
 
 
 class CloudDrive2Client:
-    """CloudDrive2 API 客户端
+    """CloudDrive2 gRPC 客户端
     
-    使用 gRPC-Web 协议与 CloudDrive2 通信
     支持两种认证方式：
     1. API Token（推荐）: 在 CloudDrive2 设置中生成的永久 Token
     2. 用户名密码: 通过登录接口获取临时 Token
@@ -34,30 +39,22 @@ class CloudDrive2Client:
         :param password: 密码（密码认证时必填）
         :param api_token: API Token（优先使用，推荐）
         """
-        self.base_url = base_url.rstrip('/')
+        # 解析地址，移除 http:// 前缀
+        self.address = base_url.replace('http://', '').replace('https://', '').rstrip('/')
         self.username = username
         self.password = password
         self.api_token = api_token
-        self._login_token = None
-        self._token_expiry = 0
+        self._jwt_token = None
         
         # 认证模式
         self._use_api_token = bool(api_token)
         
-        # 配置请求会话
-        self.session = requests.Session()
+        # 创建 gRPC channel
+        self.channel = grpc.insecure_channel(self.address)
         
-        # gRPC-Web 使用 JSON 格式
-        self.session.headers.update({
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        })
-        
-        # CloudDrive2 通常为本地服务，禁用代理
-        self.session.proxies = {
-            'http': None,
-            'https': None
-        }
+        # 创建服务 stub
+        self.file_stub = clouddrive_pb2_grpc.CloudDriveFileSrvStub(self.channel)
+        self.system_stub = clouddrive_pb2_grpc.CloudDriveSystemSrvStub(self.channel)
         
         # 初始化认证
         self._init_auth()
@@ -65,174 +62,88 @@ class CloudDrive2Client:
     def _init_auth(self):
         """初始化认证"""
         if self._use_api_token:
-            # API Token 模式：直接设置 Authorization header
-            self.session.headers.update({
-                'Authorization': f'Bearer {self.api_token}'
-            })
+            # API Token 直接使用
+            self._jwt_token = self.api_token
             logger.info("CloudDrive2 使用 API Token 认证模式")
         else:
             # 用户名密码模式：登录获取 Token
             if not self.username or not self.password:
                 raise ValueError("CloudDrive2 认证失败: 需要提供用户名密码或 API Token")
-            self._ensure_valid_token()
+            self._login()
             logger.info("CloudDrive2 使用用户名密码认证模式")
     
-    def _login(self) -> dict:
-        """
-        登录 CloudDrive2 获取 token（用户名密码模式）
-        使用 gRPC-Web 格式调用 GetToken
-        
-        :return: 登录响应数据
-        :raises: ValueError 如果登录失败
-        """
+    def _login(self):
+        """登录获取 JWT Token"""
         try:
-            # gRPC-Web 端点格式: /服务名/方法名
-            response = self.session.post(
-                f'{self.base_url}/UserSrv/GetToken',
-                json={
-                    'userName': self.username,
-                    'password': self.password,
-                    'totpCode': ''
-                },
-                timeout=(10, 30)
+            request = clouddrive_pb2.GetTokenRequest(
+                userName=self.username,
+                password=self.password
             )
-            response.raise_for_status()
-            data = response.json()
             
-            # 检查响应
-            if 'token' not in data:
-                raise ValueError(f"CloudDrive2登录失败: {data.get('message', '未知错误')}")
+            response = self.file_stub.GetToken(request)
             
-            logger.info("CloudDrive2 登录成功")
-            return data
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"CloudDrive2 登录请求失败: {str(e)}")
+            if response.success:
+                self._jwt_token = response.token
+                logger.info(f"CloudDrive2 登录成功，过期时间: {response.expiration}")
+            else:
+                raise ValueError(f"CloudDrive2 登录失败: {response.errorMessage}")
+                
+        except grpc.RpcError as e:
+            logger.error(f"CloudDrive2 登录请求失败: {e.details()}")
             raise
     
-    def _ensure_valid_token(self):
-        """确保 token 有效（仅用户名密码模式）"""
-        if self._use_api_token:
-            return
-            
-        current_time = time.time()
-        
-        if not self._login_token or current_time >= (self._token_expiry - 3600):
-            login_data = self._login()
-            self._login_token = login_data['token']
-            self._token_expiry = current_time + 86400
-            
-            self.session.headers.update({
-                'Authorization': f'Bearer {self._login_token}'
-            })
-            
-            logger.debug("CloudDrive2 登录 token 已更新")
+    def _create_metadata(self):
+        """创建带授权的元数据"""
+        if not self._jwt_token:
+            return []
+        return [('authorization', f'Bearer {self._jwt_token}')]
     
-    def _request(self, service: str, method: str, payload: dict = None, 
-                 timeout: tuple = (10, 60)) -> dict:
-        """
-        发送 gRPC-Web 请求到 CloudDrive2 API
-        
-        :param service: gRPC 服务名，如 CloudDriveFileSrv
-        :param method: 方法名，如 AddSharedLink
-        :param payload: 请求负载
-        :param timeout: 超时设置
-        :return: 响应数据
-        """
-        if not self._use_api_token:
-            self._ensure_valid_token()
-        
-        if payload is None:
-            payload = {}
-        
-        # gRPC-Web 端点格式
-        endpoint = f'{self.base_url}/{service}/{method}'
-        
-        try:
-            response = self.session.post(
-                endpoint,
-                json=payload,
-                timeout=timeout
-            )
-            response.raise_for_status()
-            
-            # 空响应也是成功的（google.protobuf.Empty）
-            if not response.text or response.text.strip() == '{}':
-                return {'success': True}
-            
-            return response.json()
-            
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                if self._use_api_token:
-                    logger.error("CloudDrive2 API Token 无效或已过期")
-                    raise ValueError("API Token 无效或已过期")
-                else:
-                    logger.warning("CloudDrive2 token 过期，正在刷新...")
-                    self._login_token = None
-                    self._ensure_valid_token()
-                    
-                    response = self.session.post(endpoint, json=payload, timeout=timeout)
-                    response.raise_for_status()
-                    if not response.text or response.text.strip() == '{}':
-                        return {'success': True}
-                    return response.json()
-            raise
-        except Exception as e:
-            logger.error(f"CloudDrive2 API 请求失败: {str(e)}")
-            raise
+    def close(self):
+        """关闭 gRPC channel"""
+        if self.channel:
+            self.channel.close()
+            logger.info("CloudDrive2 客户端已关闭")
     
     def add_shared_link(self, share_url: str, password: str = "", 
                         to_folder: str = "/115/Downloads") -> dict:
         """
         添加 115 分享链接进行转存
         
-        根据官方 API:
-        message AddSharedLinkRequest {
-            string sharedLinkUrl = 1;
-            optional string sharedPassword = 2;
-            string toFolder = 3;
-        }
-        响应: google.protobuf.Empty
-        
         :param share_url: 115 分享链接
         :param password: 分享密码（可选）
         :param to_folder: 转存目标路径
-        :return: API 响应
+        :return: 操作结果
         """
         if not share_url:
             raise ValueError("分享链接不能为空")
         
         logger.info(f"CloudDrive2 添加分享链接转存: {share_url[:50]}... -> {to_folder}")
         
-        payload = {
-            'sharedLinkUrl': share_url,
-            'toFolder': to_folder
-        }
-        if password:
-            payload['sharedPassword'] = password
-        
-        result = self._request('CloudDriveFileSrv', 'AddSharedLink', payload)
-        
-        logger.info("CloudDrive2 分享链接转存请求已发送")
-        return result
+        try:
+            request = clouddrive_pb2.AddSharedLinkRequest(
+                sharedLinkUrl=share_url,
+                sharedPassword=password,
+                toFolder=to_folder
+            )
+            
+            metadata = self._create_metadata()
+            self.file_stub.AddSharedLink(request, metadata=metadata)
+            
+            logger.info("CloudDrive2 分享链接转存请求已发送")
+            return {'success': True}
+            
+        except grpc.RpcError as e:
+            logger.error(f"CloudDrive2 分享链接转存失败: {e.details()}")
+            raise ValueError(f"转存失败: {e.details()}")
     
     def add_offline_files(self, urls: str, 
                           to_folder: str = "/115/Offline") -> dict:
         """
         添加离线任务（支持磁力链接、ED2K 等）
         
-        根据官方 API:
-        message AddOfflineFileRequest {
-            string urls = 1;
-            string toFolder = 2;
-            uint32 checkFolderAfterSecs = 3;
-        }
-        响应: FileOperationResult
-        
         :param urls: 资源链接（磁力/ED2K/HTTP等）
         :param to_folder: 下载保存路径
-        :return: API 响应
+        :return: 操作结果
         """
         if not urls:
             raise ValueError("资源链接不能为空")
@@ -248,47 +159,69 @@ class CloudDrive2Client:
         
         logger.info(f"CloudDrive2 添加{link_type}离线任务: {urls[:50]}... -> {to_folder}")
         
-        payload = {
-            'urls': urls,
-            'toFolder': to_folder,
-            'checkFolderAfterSecs': 0
-        }
-        
-        result = self._request('CloudDriveFileSrv', 'AddOfflineFiles', payload)
-        
-        logger.info("CloudDrive2 离线任务请求已发送")
-        return result
+        try:
+            request = clouddrive_pb2.AddOfflineFileRequest(
+                urls=urls,
+                toFolder=to_folder,
+                checkFolderAfterSecs=0
+            )
+            
+            metadata = self._create_metadata()
+            result = self.file_stub.AddOfflineFiles(request, metadata=metadata)
+            
+            logger.info("CloudDrive2 离线任务请求已发送")
+            return {
+                'success': result.result.success if hasattr(result, 'result') else True,
+                'message': result.result.errorMessage if hasattr(result, 'result') else ''
+            }
+            
+        except grpc.RpcError as e:
+            logger.error(f"CloudDrive2 离线任务添加失败: {e.details()}")
+            raise ValueError(f"离线任务添加失败: {e.details()}")
     
-    def get_offline_status(self, path: str = "/115/Offline", 
-                           force_refresh: bool = True) -> dict:
+    def get_offline_status(self, path: str = "/115/Offline") -> dict:
         """
         获取离线任务状态
         
         :param path: 离线任务路径
-        :param force_refresh: 是否强制刷新
         :return: 任务状态列表
         """
         logger.debug(f"CloudDrive2 查询离线任务状态: {path}")
         
-        result = self._request('CloudDriveFileSrv', 'ListOfflineFilesByPath', {
-            'path': path,
-            'forceRefresh': force_refresh
-        }, timeout=(10, 30))
-        
-        return result
+        try:
+            request = clouddrive_pb2.FileRequest(path=path)
+            
+            metadata = self._create_metadata()
+            result = self.file_stub.ListOfflineFilesByPath(request, metadata=metadata)
+            
+            return {
+                'offlineFiles': list(result.offlineFiles) if hasattr(result, 'offlineFiles') else [],
+                'status': result.status if hasattr(result, 'status') else None
+            }
+            
+        except grpc.RpcError as e:
+            logger.error(f"CloudDrive2 查询离线状态失败: {e.details()}")
+            raise ValueError(f"查询失败: {e.details()}")
     
-    def get_upload_status(self) -> dict:
+    def get_system_info(self) -> dict:
         """
-        获取上传/转存任务状态
+        获取系统信息（无需认证）
         
-        :return: 任务状态列表
+        :return: 系统信息
         """
-        logger.debug("CloudDrive2 查询上传任务状态")
-        
-        result = self._request('CloudDriveFileSrv', 'GetUploadFileList', {}, 
-                               timeout=(10, 30))
-        
-        return result
+        try:
+            from google.protobuf import empty_pb2
+            result = self.system_stub.GetSystemInfo(empty_pb2.Empty())
+            
+            return {
+                'systemReady': result.SystemReady,
+                'userName': result.UserName if hasattr(result, 'UserName') else '',
+                'version': result.Version if hasattr(result, 'Version') else ''
+            }
+            
+        except grpc.RpcError as e:
+            logger.error(f"CloudDrive2 获取系统信息失败: {e.details()}")
+            raise ValueError(f"获取系统信息失败: {e.details()}")
     
     def test_connection(self) -> bool:
         """
@@ -297,11 +230,7 @@ class CloudDrive2Client:
         :return: 连接是否成功
         """
         try:
-            if self._use_api_token:
-                # 尝试获取系统信息
-                self._request('CloudDriveSystemSrv', 'GetSystemInfo', {}, timeout=(5, 10))
-            else:
-                self._ensure_valid_token()
+            self.get_system_info()
             return True
         except Exception as e:
             logger.error(f"CloudDrive2 连接测试失败: {str(e)}")
@@ -311,3 +240,8 @@ class CloudDrive2Client:
     def auth_mode(self) -> str:
         """返回当前认证模式"""
         return "API Token" if self._use_api_token else "用户名密码"
+    
+    @property  
+    def session(self):
+        """兼容旧代码的属性"""
+        return self.channel
