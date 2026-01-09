@@ -70,6 +70,10 @@ https://github.com/Li-Qifeng/MoviePilot-Plugins-Third
 
 ## 📝 更新日志
 
+### Pro版 v1.3.0
+- 修复gRPC-Web协议格式，使用正确的端点路径格式 `/服务名/方法名`
+- 更新本地API文档
+
 ### Pro版 v1.2.0
 - 修复API 405错误，添加端点自动回退机制兼容不同版本CloudDrive2
 

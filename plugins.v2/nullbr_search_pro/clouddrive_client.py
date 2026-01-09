@@ -6,12 +6,11 @@ CloudDrive2 API 客户端
 - 磁力/ED2K离线任务
 - 任务状态查询
 
-认证方式：
-- API Token (推荐): 直接使用配置的 API Token
-- 用户名密码: 通过登录获取临时 Token
+使用 gRPC-Web 协议与 CloudDrive2 通信
 """
 import requests
 import time
+import json
 from typing import Optional, Dict
 from app.log import logger
 
@@ -19,6 +18,7 @@ from app.log import logger
 class CloudDrive2Client:
     """CloudDrive2 API 客户端
     
+    使用 gRPC-Web 协议与 CloudDrive2 通信
     支持两种认证方式：
     1. API Token（推荐）: 在 CloudDrive2 设置中生成的永久 Token
     2. 用户名密码: 通过登录接口获取临时 Token
@@ -46,6 +46,8 @@ class CloudDrive2Client:
         
         # 配置请求会话
         self.session = requests.Session()
+        
+        # gRPC-Web 使用 JSON 格式
         self.session.headers.update({
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -78,24 +80,27 @@ class CloudDrive2Client:
     def _login(self) -> dict:
         """
         登录 CloudDrive2 获取 token（用户名密码模式）
+        使用 gRPC-Web 格式调用 GetToken
         
         :return: 登录响应数据
         :raises: ValueError 如果登录失败
         """
         try:
+            # gRPC-Web 端点格式: /服务名/方法名
             response = self.session.post(
-                f'{self.base_url}/api/GetToken',
+                f'{self.base_url}/UserSrv/GetToken',
                 json={
                     'userName': self.username,
                     'password': self.password,
-                    'totpCode': ''  # TOTP 验证码，可选
+                    'totpCode': ''
                 },
                 timeout=(10, 30)
             )
             response.raise_for_status()
             data = response.json()
             
-            if not data.get('success'):
+            # 检查响应
+            if 'token' not in data:
                 raise ValueError(f"CloudDrive2登录失败: {data.get('message', '未知错误')}")
             
             logger.info("CloudDrive2 登录成功")
@@ -108,32 +113,28 @@ class CloudDrive2Client:
     def _ensure_valid_token(self):
         """确保 token 有效（仅用户名密码模式）"""
         if self._use_api_token:
-            # API Token 模式不需要刷新
             return
             
         current_time = time.time()
         
-        # 如果 token 不存在或距离过期不到1小时，重新获取
         if not self._login_token or current_time >= (self._token_expiry - 3600):
             login_data = self._login()
             self._login_token = login_data['token']
-            
-            # 设置 token 过期时间为24小时后
             self._token_expiry = current_time + 86400
             
-            # 更新 session 的 Authorization header
             self.session.headers.update({
                 'Authorization': f'Bearer {self._login_token}'
             })
             
             logger.debug("CloudDrive2 登录 token 已更新")
     
-    def _request(self, endpoint: str, payload: dict = None, 
+    def _request(self, service: str, method: str, payload: dict = None, 
                  timeout: tuple = (10, 60)) -> dict:
         """
-        发送请求到 CloudDrive2 API
+        发送 gRPC-Web 请求到 CloudDrive2 API
         
-        :param endpoint: API 端点
+        :param service: gRPC 服务名，如 CloudDriveFileSrv
+        :param method: 方法名，如 AddSharedLink
         :param payload: 请求负载
         :param timeout: 超时设置
         :return: 响应数据
@@ -144,34 +145,37 @@ class CloudDrive2Client:
         if payload is None:
             payload = {}
         
+        # gRPC-Web 端点格式
+        endpoint = f'{self.base_url}/{service}/{method}'
+        
         try:
             response = self.session.post(
-                f'{self.base_url}{endpoint}',
+                endpoint,
                 json=payload,
                 timeout=timeout
             )
             response.raise_for_status()
+            
+            # 空响应也是成功的（google.protobuf.Empty）
+            if not response.text or response.text.strip() == '{}':
+                return {'success': True}
+            
             return response.json()
             
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 401:
                 if self._use_api_token:
-                    # API Token 无效
-                    logger.error("CloudDrive2 API Token 无效或已过期，请检查配置")
+                    logger.error("CloudDrive2 API Token 无效或已过期")
                     raise ValueError("API Token 无效或已过期")
                 else:
-                    # 登录 token 过期，刷新后重试
                     logger.warning("CloudDrive2 token 过期，正在刷新...")
                     self._login_token = None
                     self._ensure_valid_token()
                     
-                    # 重试请求
-                    response = self.session.post(
-                        f'{self.base_url}{endpoint}',
-                        json=payload,
-                        timeout=timeout
-                    )
+                    response = self.session.post(endpoint, json=payload, timeout=timeout)
                     response.raise_for_status()
+                    if not response.text or response.text.strip() == '{}':
+                        return {'success': True}
                     return response.json()
             raise
         except Exception as e:
@@ -183,7 +187,15 @@ class CloudDrive2Client:
         """
         添加 115 分享链接进行转存
         
-        :param share_url: 115 分享链接，如 https://115.com/s/xxx
+        根据官方 API:
+        message AddSharedLinkRequest {
+            string sharedLinkUrl = 1;
+            optional string sharedPassword = 2;
+            string toFolder = 3;
+        }
+        响应: google.protobuf.Empty
+        
+        :param share_url: 115 分享链接
         :param password: 分享密码（可选）
         :param to_folder: 转存目标路径
         :return: API 响应
@@ -193,40 +205,30 @@ class CloudDrive2Client:
         
         logger.info(f"CloudDrive2 添加分享链接转存: {share_url[:50]}... -> {to_folder}")
         
-        # CloudDrive2 使用 gRPC-Web 风格端点
-        # 尝试多个可能的端点路径
-        endpoints = [
-            '/api/fs/115/AddSharedLink',
-            '/api/FileOperation/AddSharedLink',
-            '/api/AddSharedLink'
-        ]
-        
         payload = {
             'sharedLinkUrl': share_url,
-            'sharedPassword': password,
             'toFolder': to_folder
         }
+        if password:
+            payload['sharedPassword'] = password
         
-        last_error = None
-        for endpoint in endpoints:
-            try:
-                result = self._request(endpoint, payload)
-                logger.info(f"CloudDrive2 分享链接转存请求已发送 (端点: {endpoint})")
-                return result
-            except Exception as e:
-                last_error = e
-                if '405' in str(e) or '404' in str(e):
-                    logger.debug(f"端点 {endpoint} 不可用，尝试下一个...")
-                    continue
-                raise
+        result = self._request('CloudDriveFileSrv', 'AddSharedLink', payload)
         
-        # 所有端点都失败
-        raise last_error
+        logger.info("CloudDrive2 分享链接转存请求已发送")
+        return result
     
     def add_offline_files(self, urls: str, 
                           to_folder: str = "/115/Offline") -> dict:
         """
         添加离线任务（支持磁力链接、ED2K 等）
+        
+        根据官方 API:
+        message AddOfflineFileRequest {
+            string urls = 1;
+            string toFolder = 2;
+            uint32 checkFolderAfterSecs = 3;
+        }
+        响应: FileOperationResult
         
         :param urls: 资源链接（磁力/ED2K/HTTP等）
         :param to_folder: 下载保存路径
@@ -246,33 +248,16 @@ class CloudDrive2Client:
         
         logger.info(f"CloudDrive2 添加{link_type}离线任务: {urls[:50]}... -> {to_folder}")
         
-        # CloudDrive2 使用 gRPC-Web 风格端点
-        endpoints = [
-            '/api/fs/115/AddOfflineFiles',
-            '/api/FileOperation/AddOfflineFiles', 
-            '/api/AddOfflineFiles'
-        ]
-        
         payload = {
             'urls': urls,
             'toFolder': to_folder,
             'checkFolderAfterSecs': 0
         }
         
-        last_error = None
-        for endpoint in endpoints:
-            try:
-                result = self._request(endpoint, payload)
-                logger.info(f"CloudDrive2 离线任务请求已发送 (端点: {endpoint})")
-                return result
-            except Exception as e:
-                last_error = e
-                if '405' in str(e) or '404' in str(e):
-                    logger.debug(f"端点 {endpoint} 不可用，尝试下一个...")
-                    continue
-                raise
+        result = self._request('CloudDriveFileSrv', 'AddOfflineFiles', payload)
         
-        raise last_error
+        logger.info("CloudDrive2 离线任务请求已发送")
+        return result
     
     def get_offline_status(self, path: str = "/115/Offline", 
                            force_refresh: bool = True) -> dict:
@@ -285,7 +270,7 @@ class CloudDrive2Client:
         """
         logger.debug(f"CloudDrive2 查询离线任务状态: {path}")
         
-        result = self._request('/api/ListOfflineFilesByPath', {
+        result = self._request('CloudDriveFileSrv', 'ListOfflineFilesByPath', {
             'path': path,
             'forceRefresh': force_refresh
         }, timeout=(10, 30))
@@ -300,7 +285,8 @@ class CloudDrive2Client:
         """
         logger.debug("CloudDrive2 查询上传任务状态")
         
-        result = self._request('/api/GetUploadFileList', {}, timeout=(10, 30))
+        result = self._request('CloudDriveFileSrv', 'GetUploadFileList', {}, 
+                               timeout=(10, 30))
         
         return result
     
@@ -312,8 +298,8 @@ class CloudDrive2Client:
         """
         try:
             if self._use_api_token:
-                # API Token 模式：尝试一个简单的 API 调用
-                self._request('/api/GetSystemInfo', {}, timeout=(5, 10))
+                # 尝试获取系统信息
+                self._request('CloudDriveSystemSrv', 'GetSystemInfo', {}, timeout=(5, 10))
             else:
                 self._ensure_valid_token()
             return True
