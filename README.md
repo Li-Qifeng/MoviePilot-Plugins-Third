@@ -70,6 +70,9 @@ https://github.com/Li-Qifeng/MoviePilot-Plugins-Third
 
 ## 📝 更新日志
 
+### Pro版 v1.4.2
+- 修复模块导入问题，将生成代码中的绝对导入改为相对导入
+
 ### Pro版 v1.4.1
 - 修复Protobuf版本兼容问题，使用protobuf 5.x重新生成gRPC代码
 
