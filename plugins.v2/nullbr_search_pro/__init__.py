@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.0.0"
+    plugin_version = "1.1.0"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -37,8 +37,9 @@ class nullbr_search_pro(_PluginBase):
         # CloudDrive2配置
         self._cd2_enabled = False
         self._cd2_url = ""
-        self._cd2_username = ""
-        self._cd2_password = ""
+        self._cd2_api_token = ""                  # API Token（推荐）
+        self._cd2_username = ""                   # 用户名（备用）
+        self._cd2_password = ""                   # 密码（备用）
         self._cd2_save_path = "/115/Downloads"    # 115转存路径
         self._cd2_offline_path = "/115/Offline"   # 离线任务路径
         
@@ -162,6 +163,7 @@ class nullbr_search_pro(_PluginBase):
             # CloudDrive2配置
             self._cd2_enabled = config.get("cd2_enabled", False)
             self._cd2_url = config.get("cd2_url", "")
+            self._cd2_api_token = config.get("cd2_api_token", "")
             self._cd2_username = config.get("cd2_username", "")
             self._cd2_password = config.get("cd2_password", "")
             self._cd2_save_path = config.get("cd2_save_path", "/115/Downloads")
@@ -169,7 +171,8 @@ class nullbr_search_pro(_PluginBase):
             
             logger.info(f"Nullbr资源优先级设置: {' > '.join(self._resource_priority)}")
             if self._cd2_enabled:
-                logger.info(f"CloudDrive2已启用: {self._cd2_url}")
+                auth_mode = "API Token" if self._cd2_api_token else "用户名密码"
+                logger.info(f"CloudDrive2已启用: {self._cd2_url} (认证模式: {auth_mode})")
         
         # 初始化API客户端
         if self._enabled and self._app_id:
@@ -186,18 +189,27 @@ class nullbr_search_pro(_PluginBase):
             self._client = None
         
         # 初始化CloudDrive2客户端
-        if self._cd2_enabled and self._cd2_url and self._cd2_username and self._cd2_password:
-            try:
-                from .clouddrive_client import CloudDrive2Client
-                self._cd2_client = CloudDrive2Client(
-                    self._cd2_url, 
-                    self._cd2_username, 
-                    self._cd2_password
-                )
-                logger.info("CloudDrive2客户端已初始化")
-            except Exception as e:
-                logger.error(f"CloudDrive2初始化失败: {str(e)}")
-                self._cd2_enabled = False
+        # 支持两种认证方式: API Token (优先) 或 用户名密码
+        if self._cd2_enabled and self._cd2_url:
+            has_api_token = bool(self._cd2_api_token)
+            has_password_auth = bool(self._cd2_username and self._cd2_password)
+            
+            if has_api_token or has_password_auth:
+                try:
+                    from .clouddrive_client import CloudDrive2Client
+                    self._cd2_client = CloudDrive2Client(
+                        base_url=self._cd2_url,
+                        username=self._cd2_username if not has_api_token else None,
+                        password=self._cd2_password if not has_api_token else None,
+                        api_token=self._cd2_api_token if has_api_token else None
+                    )
+                    logger.info(f"CloudDrive2客户端已初始化 (认证模式: {self._cd2_client.auth_mode})")
+                except Exception as e:
+                    logger.error(f"CloudDrive2初始化失败: {str(e)}")
+                    self._cd2_enabled = False
+                    self._cd2_client = None
+            else:
+                logger.warning("CloudDrive2配置不完整: 需要 API Token 或 用户名密码")
                 self._cd2_client = None
         else:
             self._cd2_client = None
@@ -572,11 +584,12 @@ class nullbr_search_pro(_PluginBase):
                                                     {
                                                         'component': 'VTextField',
                                                         'props': {
-                                                            'model': 'cd2_username',
-                                                            'label': 'CD2用户名',
-                                                            'placeholder': '请输入CloudDrive2登录用户名',
-                                                            'hint': '用于登录CloudDrive2的用户名',
-                                                            'persistent-hint': True
+                                                            'model': 'cd2_api_token',
+                                                            'label': 'API Token（推荐）',
+                                                            'placeholder': '在CD2设置中生成的API Token',
+                                                            'hint': '推荐: 永久有效，无需续期',
+                                                            'persistent-hint': True,
+                                                            'type': 'password'
                                                         }
                                                     }
                                                 ]
@@ -593,16 +606,37 @@ class nullbr_search_pro(_PluginBase):
                                                     {
                                                         'component': 'VTextField',
                                                         'props': {
+                                                            'model': 'cd2_username',
+                                                            'label': 'CD2用户名（备选）',
+                                                            'placeholder': 'API Token为空时使用',
+                                                            'hint': '备选: 无API Token时填写',
+                                                            'persistent-hint': True
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 6},
+                                                'content': [
+                                                    {
+                                                        'component': 'VTextField',
+                                                        'props': {
                                                             'model': 'cd2_password',
-                                                            'label': 'CD2密码',
-                                                            'placeholder': '请输入CloudDrive2登录密码',
-                                                            'hint': '用于登录CloudDrive2的密码',
+                                                            'label': 'CD2密码（备选）',
+                                                            'placeholder': 'API Token为空时使用',
+                                                            'hint': '备选: 无API Token时填写',
                                                             'persistent-hint': True,
                                                             'type': 'password'
                                                         }
                                                     }
                                                 ]
-                                            },
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        'component': 'VRow',
+                                        'content': [
                                             {
                                                 'component': 'VCol',
                                                 'props': {'cols': 12, 'md': 6},
@@ -687,6 +721,7 @@ class nullbr_search_pro(_PluginBase):
         "priority_4": "video",
         "cd2_enabled": False,
         "cd2_url": "",
+        "cd2_api_token": "",
         "cd2_username": "",
         "cd2_password": "",
         "cd2_save_path": "/115/Downloads",
