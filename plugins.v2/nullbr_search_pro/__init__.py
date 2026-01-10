@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.5.1"
+    plugin_version = "1.5.2"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -796,11 +796,11 @@ class nullbr_search_pro(_PluginBase):
                                                         'component': 'VTextarea',
                                                         'props': {
                                                             'model': 'p115_cookies',
-                                                            'label': '115 Cookie',
+                                                            'label': '115 Cookie（必须包含 UID, CID, SEID, KID）',
                                                             'placeholder': 'UID=xxx; CID=xxx; SEID=xxx; KID=xxx',
-                                                            'hint': '从浏览器开发者工具获取，格式: UID=xxx; CID=xxx; SEID=xxx',
+                                                            'hint': 'F12 -> Application -> Cookies -> 115.com 获取完整Cookie',
                                                             'persistent-hint': True,
-                                                            'rows': 2
+                                                            'rows': 3
                                                         }
                                                     }
                                                 ]
