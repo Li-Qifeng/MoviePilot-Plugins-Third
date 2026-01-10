@@ -25,10 +25,9 @@ https://github.com/Li-Qifeng/MoviePilot-Plugins-Third
 
 | 功能 | Nullbr资源搜索 | Pro版 |
 |------|:-------------:|:-----:|
-| 115转存 | ✅ (CMS) | ✅ (CloudDrive2) |
-| 磁力离线 | ❌ | ✅ |
-| ED2K离线 | ❌ | ✅ |
-| API Token认证 | ❌ | ✅ |
+| 115转存(p115client) | ❌ | ✅ |
+| 磁力/ED2K离线(CD2) | ❌ | ✅ |
+| 按钮交互 | ❌ | ✅ |
 
 ### 配置说明
 
@@ -36,68 +35,60 @@ https://github.com/Li-Qifeng/MoviePilot-Plugins-Third
 - **APP_ID**: Nullbr API的应用ID
 - **API_KEY**: Nullbr API的密钥
 
+#### 115 转存配置（推荐）
+使用 p115client 直接调用 115 API，支持分享链接转存：
+
+- **启用115转存**: 开启后支持115分享链接转存
+- **转存目录CID**: 在浏览器 URL 中获取，如 `https://115.com/?cid=123456` 中的 `123456`
+- **115 Cookie**: 必须包含 `UID`, `CID`, `SEID`, `KID`
+  - 获取方式: 浏览器登录 115.com → F12 → Application → Cookies
+
 #### CloudDrive2配置（可选）
-支持两种认证方式：
+仅用于磁力/ED2K离线任务：
 
-**方式1: API Token（推荐）**
 - **CD2地址**: CloudDrive2服务器地址，如 `http://localhost:19798`
-- **API Token**: 在CloudDrive2设置中生成，永久有效
-
-**方式2: 用户名密码**
-- **CD2地址**: CloudDrive2服务器地址
-- **用户名/密码**: CloudDrive2登录凭证
-
-> 💡 API Token模式推荐：无需续期，配置更简单
-
-#### 路径配置
-- **115转存路径**: 默认 `/115/Downloads`
+- **API Token**: 在CloudDrive2设置中生成
 - **离线任务路径**: 默认 `/115/Offline`
 
 ### 使用方法
 
-**所有交互必须以问号结尾！**
+> ⚠️ **重要**: 为避免与 MoviePilot 原生搜索冲突，本插件使用 **问号结尾** 触发搜索
+
+#### 文本交互（所有渠道）
 
 ```
-搜索影片？        → 搜索资源
-1？              → 选择第1个结果
-1.115？          → 获取第1个结果的115资源
+搜索影片？        → 搜索资源（必须以？结尾）
+1               → 选择第1个结果
+1.115           → 获取第1个结果的115资源
 ```
 
 获取资源后发送编号即可转存/离线：
 ```
-1                → 转存/离线第1个资源
+1               → 转存/离线第1个资源
 ```
+
+#### 按钮交互（Telegram/Slack）
+
+搜索结果会显示交互按钮，**点击按钮即可选择**，无需输入数字：
+
+- `📥 1. 影片名` - 点击选择第1个结果
+- `📥 2. 影片名` - 点击选择第2个结果
+
+> 💡 按钮交互仅支持 Telegram、Slack 等支持按钮回调的通道
 
 ## 📝 更新日志
 
-### Pro版 v1.5.0 ✨
-- **重大更新**: 新增 p115client 支持，通过 Cookie 直接调用 115 API 实现分享链接转存
+### Pro版 v1.7.0 ✨
+- **新增按钮交互消息系统**，支持 Telegram/Slack 按钮回调
+- 搜索结果显示交互按钮，点击即可选择
+- 保留文本输入方式作为兼容方案
+
+### Pro版 v1.6.0
+- 精简配置：CD2只保留API Token，115转存只用CID
+
+### Pro版 v1.5.0
+- 新增 p115client 支持，通过 Cookie 直接调用 115 API
 - 解决 CloudDrive2 的 115open 不支持分享转存的问题
-- 双客户端架构: 115转存使用 p115client，磁力/ED2K 使用 CloudDrive2
-
-### Pro版 v1.4.2
-- 修复模块导入问题，将生成代码中的绝对导入改为相对导入
-
-### Pro版 v1.4.1
-- 修复Protobuf版本兼容问题，使用protobuf 5.x重新生成gRPC代码
-
-### Pro版 v1.4.0
-- 使用原生gRPC协议重写客户端，完全兼容CloudDrive2官方API
-- 新增 grpcio 依赖
-
-### Pro版 v1.3.0
-- 修复gRPC-Web协议格式，使用正确的端点路径格式 `/服务名/方法名`
-- 更新本地API文档
-
-### Pro版 v1.2.0
-- 修复API 405错误，添加端点自动回退机制兼容不同版本CloudDrive2
-
-### Pro版 v1.1.0
-- 优化CloudDrive2认证，支持API Token（推荐）和用户名密码双重认证方式
-
-### Pro版 v1.0.0
-- 初始版本
-- 新增CloudDrive2支持（115转存/磁力离线/ED2K离线）
 
 ## 📄 许可证
 
