@@ -239,15 +239,30 @@ class nullbr_search_pro(_PluginBase):
     def get_command() -> List[Dict[str, Any]]:
         """
         注册插件远程命令
-        使用 /nullbr 关键词 触发搜索
         """
-        return [{
-            "cmd": "/nullbr",
-            "event": EventType.PluginAction,
-            "desc": "Nullbr资源搜索",
-            "category": "资源搜索",
-            "data": {"action": "nullbr_search"}
-        }]
+        return [
+            {
+                "cmd": "/nullbr",
+                "event": EventType.PluginAction,
+                "desc": "Nullbr资源搜索",
+                "category": "资源搜索",
+                "data": {"action": "nullbr_search"}
+            },
+            {
+                "cmd": "/nullbr_offline",
+                "event": EventType.PluginAction,
+                "desc": "查询离线任务状态",
+                "category": "资源搜索",
+                "data": {"action": "nullbr_offline"}
+            },
+            {
+                "cmd": "/nullbr_help",
+                "event": EventType.PluginAction,
+                "desc": "Nullbr帮助",
+                "category": "资源搜索",
+                "data": {"action": "nullbr_help"}
+            }
+        ]
 
     def get_api(self) -> List[Dict[str, Any]]:
         """获取插件API"""
@@ -881,15 +896,16 @@ class nullbr_search_pro(_PluginBase):
     @eventmanager.register(EventType.PluginAction)
     def handle_command(self, event: Event):
         """
-        处理插件命令 /nullbr
-        用法: /nullbr 关键词
+        处理插件命令
         """
         event_data = event.event_data
         if not event_data:
             return
         
+        action = event_data.get("action")
+        
         # 检查是否为本插件的命令
-        if event_data.get("action") != "nullbr_search":
+        if action not in ["nullbr_search", "nullbr_offline", "nullbr_help"]:
             return
         
         if not self._enabled:
@@ -899,6 +915,16 @@ class nullbr_search_pro(_PluginBase):
         channel = event_data.get("channel")
         userid = event_data.get("user")
         
+        # 根据命令类型分发处理
+        if action == "nullbr_search":
+            self._handle_search_command(event_data, channel, userid)
+        elif action == "nullbr_offline":
+            self._handle_offline_command(event_data, channel, userid)
+        elif action == "nullbr_help":
+            self._handle_help_command(channel, userid)
+    
+    def _handle_search_command(self, event_data: dict, channel, userid: str):
+        """处理搜索命令 /nullbr"""
         # 尝试多种方式获取搜索关键词
         keyword = None
         
@@ -911,29 +937,108 @@ class nullbr_search_pro(_PluginBase):
         if not keyword:
             text = event_data.get("text", "")
             if text and text.startswith("/nullbr"):
-                # 去掉命令前缀，提取关键词
-                keyword = text[7:].strip()  # 去掉 "/nullbr"
+                keyword = text[7:].strip()
         
         # 方式3: 从 arg_str 字段获取
         if not keyword:
             keyword = event_data.get("arg_str", "").strip()
         
-        logger.info(f"收到 /nullbr 命令, 关键词: {keyword}, 用户: {userid}, event_data: {event_data}")
+        logger.info(f"收到 /nullbr 命令, 关键词: {keyword}, 用户: {userid}")
         
         if not keyword:
-            # 没有关键词，发送使用说明
-            self.post_message(
-                channel=channel,
-                title="Nullbr资源搜索",
-                text="🔍 **使用方法**\n\n"
-                     "`/nullbr 影片名` - 搜索资源\n\n"
-                     "示例: `/nullbr 流浪地球`",
-                userid=userid
-            )
+            self._handle_help_command(channel, userid)
             return
         
         # 执行搜索
         self.search_and_reply(keyword, channel, userid)
+    
+    def _handle_offline_command(self, event_data: dict, channel, userid: str):
+        """处理离线命令 /nullbr_offline"""
+        if not self._cd2_enabled or not self._cd2_client:
+            self.post_message(
+                channel=channel,
+                title="离线任务",
+                text="❌ CloudDrive2 未配置，无法查询离线任务\n\n"
+                     "请在插件设置中配置 CloudDrive2",
+                userid=userid
+            )
+            return
+        
+        try:
+            # 使用 get_offline_status 获取离线任务列表
+            result = self._cd2_client.get_offline_status()
+            tasks = result.get('offlineFiles', [])
+            
+            if not tasks:
+                self.post_message(
+                    channel=channel,
+                    title="离线任务",
+                    text="📭 当前没有离线任务",
+                    userid=userid
+                )
+                return
+            
+            # 格式化任务列表
+            text = f"📥 离线任务列表 (共 {len(tasks)} 个)\n\n"
+            for i, task in enumerate(tasks[:10], 1):
+                # 从 gRPC 对象中获取属性
+                name = getattr(task, 'name', '未知')[:30] if hasattr(task, 'name') else str(task)[:30]
+                progress = getattr(task, 'percent', 0) if hasattr(task, 'percent') else 0
+                status = getattr(task, 'status', '未知') if hasattr(task, 'status') else '未知'
+                text += f"**{i}.** {name}\n"
+                text += f"   📊 进度: {progress}% | 状态: {status}\n"
+            
+            if len(tasks) > 10:
+                text += f"\n... 还有 {len(tasks) - 10} 个任务"
+            
+            self.post_message(
+                channel=channel,
+                title="离线任务",
+                text=text,
+                userid=userid
+            )
+        except Exception as e:
+            logger.error(f"查询离线任务失败: {str(e)}")
+            self.post_message(
+                channel=channel,
+                title="离线任务",
+                text=f"❌ 查询离线任务失败: {str(e)}",
+                userid=userid
+            )
+    
+    def _handle_help_command(self, channel, userid: str):
+        """处理帮助命令 /nullbr_help"""
+        help_text = """🔍 **Nullbr资源搜索Pro 使用帮助**
+
+**📋 命令列表**
+
+`/nullbr 影片名` - 搜索资源
+  示例: `/nullbr 流浪地球`
+
+`/nullbr_offline` - 查询离线任务状态
+
+`/nullbr_help` - 显示帮助信息
+
+**📝 选择资源**
+
+`#数字` - 选择搜索结果
+  示例: `#1` 选择第1个结果
+
+`#数字.类型` - 获取指定类型资源
+  示例: `#1.115` 获取115链接
+  类型: 115, magnet, ed2k, video
+
+**💡 提示**
+- 搜索结果按优先级自动获取资源
+- 115 链接支持自动转存
+- 磁力/ED2K 链接支持离线下载
+"""
+        self.post_message(
+            channel=channel,
+            title="Nullbr帮助",
+            text=help_text,
+            userid=userid
+        )
 
     @eventmanager.register(EventType.MessageAction)
     def handle_message_action(self, event: Event):
