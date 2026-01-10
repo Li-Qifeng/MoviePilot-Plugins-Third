@@ -52,9 +52,8 @@ class CloudDrive2Client:
         # 创建 gRPC channel
         self.channel = grpc.insecure_channel(self.address)
         
-        # 创建服务 stub
+        # 创建服务 stub (所有方法都在 CloudDriveFileSrv 中)
         self.file_stub = clouddrive_pb2_grpc.CloudDriveFileSrvStub(self.channel)
-        self.system_stub = clouddrive_pb2_grpc.CloudDriveSystemSrvStub(self.channel)
         
         # 初始化认证
         self._init_auth()
@@ -211,7 +210,8 @@ class CloudDrive2Client:
         """
         try:
             from google.protobuf import empty_pb2
-            result = self.system_stub.GetSystemInfo(empty_pb2.Empty())
+            # GetSystemInfo 在 CloudDriveFileSrv 中
+            result = self.file_stub.GetSystemInfo(empty_pb2.Empty())
             
             return {
                 'systemReady': result.SystemReady,
