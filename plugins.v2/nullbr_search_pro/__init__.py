@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.5.0"
+    plugin_version = "1.5.1"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -46,7 +46,7 @@ class nullbr_search_pro(_PluginBase):
         # 115转存配置 (用于分享链接转存)
         self._p115_enabled = False
         self._p115_cookies = ""                   # 115 Cookie
-        self._p115_save_cid = "0"                 # 转存目标目录 CID
+        self._p115_save_path = "/我的接收"          # 转存目标文件夹路径
         
         # 客户端实例
         self._client = None
@@ -223,13 +223,16 @@ class nullbr_search_pro(_PluginBase):
         # 初始化 115 分享转存客户端
         self._p115_enabled = config.get("p115_enabled", False) if config else False
         self._p115_cookies = config.get("p115_cookies", "") if config else ""
-        self._p115_save_cid = config.get("p115_save_cid", "0") if config else "0"
+        self._p115_save_path = config.get("p115_save_path", "/我的接收") if config else "/我的接收"
         
         if self._p115_enabled and self._p115_cookies:
             try:
                 from .p115_client import P115ShareClient
-                self._p115_client = P115ShareClient(cookies=self._p115_cookies)
-                logger.info("115 分享转存客户端已初始化")
+                self._p115_client = P115ShareClient(
+                    cookies=self._p115_cookies,
+                    save_path=self._p115_save_path
+                )
+                logger.info(f"115 分享转存客户端已初始化，目标路径: {self._p115_save_path}")
             except ImportError:
                 logger.warning("p115client 未安装，115分享转存功能不可用。请安装: pip install p115client")
                 self._p115_client = None
@@ -771,10 +774,10 @@ class nullbr_search_pro(_PluginBase):
                                                     {
                                                         'component': 'VTextField',
                                                         'props': {
-                                                            'model': 'p115_save_cid',
-                                                            'label': '转存目录CID',
-                                                            'placeholder': '0',
-                                                            'hint': '0表示根目录，可在浏览器URL中获取',
+                                                            'model': 'p115_save_path',
+                                                            'label': '转存目录路径',
+                                                            'placeholder': '/我的接收',
+                                                            'hint': '转存目标文件夹路径，不存在会自动创建',
                                                             'persistent-hint': True
                                                         }
                                                     }
@@ -838,7 +841,7 @@ class nullbr_search_pro(_PluginBase):
         "search_timeout": 30,
         "p115_enabled": False,
         "p115_cookies": "",
-        "p115_save_cid": "0"
+        "p115_save_path": "/我的接收"
         }
 
     def get_page(self) -> List[dict]:
@@ -1470,8 +1473,7 @@ class nullbr_search_pro(_PluginBase):
         
         try:
             result = self._p115_client.save_share_link(
-                share_url=resource_url,
-                to_folder_cid=self._p115_save_cid
+                share_url=resource_url
             )
             
             # 转存成功
@@ -1481,7 +1483,7 @@ class nullbr_search_pro(_PluginBase):
                 text=f"🎉 「{title}」资源转存成功!\n\n"
                      f"📁 {resource_title}\n"
                      f"📊 大小: {resource_size}\n"
-                     f"📂 保存位置: 115网盘 (CID: {self._p115_save_cid})\n\n"
+                     f"📂 保存位置: {self._p115_save_path}\n\n"
                      f"💡 {result.get('message', '')}",
                 userid=userid
             )
