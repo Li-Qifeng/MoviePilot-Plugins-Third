@@ -16,7 +16,7 @@
     "name": "Nullbr资源搜索Pro",
     "description": "支持Nullbr API搜索影视资源，集成p115client/CloudDrive2实现115转存和磁力/ED2K离线下载",
     "labels": "资源,CloudDrive2,115,p115client",
-    "version": "1.5.2",
+    "version": "1.5.3",
     "icon": "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png",
     "author": "Li-Qifeng",
     "level": 1,
@@ -31,7 +31,8 @@
       "v1.4.3": "移除不存在的CloudDriveSystemSrvStub，统一使用CloudDriveFileSrvStub",
       "v1.5.0": "新增p115client支持，通过Cookie直接调用115 API实现分享链接转存",
       "v1.5.1": "修复fid字段问题，增加详细调试日志，支持文件夹路径自动获取CID",
-      "v1.5.2": "增加Cookie验证(必须包含UID/CID/SEID)，增加登录状态验证，改进错误提示"
+      "v1.5.2": "增加Cookie验证(必须包含UID/CID/SEID)，增加登录状态验证，改进错误提示",
+      "v1.5.3": "改回支持手动填写CID（优先），路径作为备用方案"
     }
   }
 }

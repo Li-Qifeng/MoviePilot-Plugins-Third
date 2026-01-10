@@ -53,12 +53,13 @@ class P115ShareClient:
         r')/s/([a-zA-Z0-9]+)(?:\?password=([a-zA-Z0-9]+))?'
     )
     
-    def __init__(self, cookies: str, save_path: str = "/我的接收"):
+    def __init__(self, cookies: str, save_cid: str = None, save_path: str = "/我的接收"):
         """
         初始化客户端
         
         :param cookies: 115 Cookie 字符串，必须包含 UID, CID, SEID, KID
-        :param save_path: 转存的目标文件夹路径（默认 /我的接收）
+        :param save_cid: 转存目标文件夹 CID（优先使用，可在浏览器 URL 中获取）
+        :param save_path: 转存目标文件夹路径（仅当 save_cid 为空时使用）
         :raises ValueError: Cookie 格式不正确或缺少必要字段
         :raises ConnectionError: 无法连接 115 服务器或 Cookie 已过期
         """
@@ -69,9 +70,10 @@ class P115ShareClient:
         self._validate_cookies(cookies)
         
         self.cookies = cookies
+        self.save_cid_config = save_cid  # 用户配置的 CID
         self.save_path = save_path
         self._client: Optional[P115Client] = None
-        self._save_cid: Optional[str] = None
+        self._save_cid: Optional[str] = None  # 最终使用的 CID
         self._user_name: Optional[str] = None
         
         # 初始化客户端
@@ -115,12 +117,19 @@ class P115ShareClient:
                     "获取方式: 浏览器登录 115.com -> F12 开发者工具 -> Application -> Cookies"
                 )
             
-            # 获取保存目录的 CID
-            self._save_cid = self._get_or_create_folder_cid(self.save_path)
-            if self._save_cid == "0" and self.save_path not in ["/", "", "0"]:
-                logger.warning(f"无法获取目标目录 '{self.save_path}' 的 CID，将使用根目录")
+            # 确定保存目录的 CID
+            # 优先级: 手动填写的 CID > 路径自动获取
+            if self.save_cid_config and self.save_cid_config.strip() and self.save_cid_config != "0":
+                # 使用用户手动填写的 CID
+                self._save_cid = self.save_cid_config.strip()
+                logger.info(f"115 使用手动配置的 CID: {self._save_cid}")
             else:
-                logger.info(f"115 转存目标目录: {self.save_path} -> CID: {self._save_cid}")
+                # 尝试自动获取路径对应的 CID
+                self._save_cid = self._get_or_create_folder_cid(self.save_path)
+                if self._save_cid == "0" and self.save_path not in ["/", "", "0"]:
+                    logger.warning(f"无法获取目标目录 '{self.save_path}' 的 CID，将使用根目录。建议手动填写 CID。")
+                else:
+                    logger.info(f"115 转存目标目录: {self.save_path} -> CID: {self._save_cid}")
             
         except ConnectionError:
             raise

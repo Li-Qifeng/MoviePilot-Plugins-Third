@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.5.2"
+    plugin_version = "1.5.3"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -46,7 +46,8 @@ class nullbr_search_pro(_PluginBase):
         # 115转存配置 (用于分享链接转存)
         self._p115_enabled = False
         self._p115_cookies = ""                   # 115 Cookie
-        self._p115_save_path = "/我的接收"          # 转存目标文件夹路径
+        self._p115_save_cid = ""                  # 转存目标 CID（优先）
+        self._p115_save_path = "/我的接收"          # 转存目标路径（备用）
         
         # 客户端实例
         self._client = None
@@ -223,6 +224,7 @@ class nullbr_search_pro(_PluginBase):
         # 初始化 115 分享转存客户端
         self._p115_enabled = config.get("p115_enabled", False) if config else False
         self._p115_cookies = config.get("p115_cookies", "") if config else ""
+        self._p115_save_cid = config.get("p115_save_cid", "") if config else ""
         self._p115_save_path = config.get("p115_save_path", "/我的接收") if config else "/我的接收"
         
         if self._p115_enabled and self._p115_cookies:
@@ -230,9 +232,11 @@ class nullbr_search_pro(_PluginBase):
                 from .p115_client import P115ShareClient
                 self._p115_client = P115ShareClient(
                     cookies=self._p115_cookies,
-                    save_path=self._p115_save_path
+                    save_cid=self._p115_save_cid,  # CID 优先
+                    save_path=self._p115_save_path  # 路径备用
                 )
-                logger.info(f"115 分享转存客户端已初始化，目标路径: {self._p115_save_path}")
+                target = self._p115_save_cid if self._p115_save_cid else self._p115_save_path
+                logger.info(f"115 分享转存客户端已初始化，目标: {target}")
             except ImportError:
                 logger.warning("p115client 未安装，115分享转存功能不可用。请安装: pip install p115client")
                 self._p115_client = None
@@ -774,10 +778,26 @@ class nullbr_search_pro(_PluginBase):
                                                     {
                                                         'component': 'VTextField',
                                                         'props': {
+                                                            'model': 'p115_save_cid',
+                                                            'label': '转存目录CID（推荐）',
+                                                            'placeholder': '如: 3338283296615502143',
+                                                            'hint': '优先使用，在浏览器打开目录后从URL获取cid参数',
+                                                            'persistent-hint': True
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 4},
+                                                'content': [
+                                                    {
+                                                        'component': 'VTextField',
+                                                        'props': {
                                                             'model': 'p115_save_path',
-                                                            'label': '转存目录路径',
+                                                            'label': '转存目录路径（备用）',
                                                             'placeholder': '/我的接收',
-                                                            'hint': '转存目标文件夹路径，不存在会自动创建',
+                                                            'hint': '仅当CID为空时使用',
                                                             'persistent-hint': True
                                                         }
                                                     }
@@ -841,6 +861,7 @@ class nullbr_search_pro(_PluginBase):
         "search_timeout": 30,
         "p115_enabled": False,
         "p115_cookies": "",
+        "p115_save_cid": "",
         "p115_save_path": "/我的接收"
         }
 
@@ -1483,7 +1504,7 @@ class nullbr_search_pro(_PluginBase):
                 text=f"🎉 「{title}」资源转存成功!\n\n"
                      f"📁 {resource_title}\n"
                      f"📊 大小: {resource_size}\n"
-                     f"📂 保存位置: {self._p115_save_path}\n\n"
+                     f"📂 保存位置: CID={self._p115_save_cid or '0'}({self._p115_save_path})\n\n"
                      f"💡 {result.get('message', '')}",
                 userid=userid
             )
