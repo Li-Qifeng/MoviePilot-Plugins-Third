@@ -610,6 +610,7 @@ class nullbr_search_pro(_PluginBase):
                                                         }
                                                     }
                                                 ]
+                                            }
                                         ]
                                     },
                                     {
