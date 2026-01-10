@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.6.0"
+    plugin_version = "1.7.0"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -872,6 +872,79 @@ class nullbr_search_pro(_PluginBase):
                 logger.info(f"检测到搜索请求: {keyword}")
                 self.search_and_reply(keyword, channel, userid)
 
+    @eventmanager.register(EventType.MessageAction)
+    def handle_message_action(self, event: Event):
+        """
+        处理消息按钮回调
+        支持 Telegram/Slack 等支持按钮回调的渠道
+        
+        回调数据格式: [PLUGIN]nullbr_search_pro|action
+        """
+        if not self._enabled:
+            return
+        
+        event_data = event.event_data
+        if not event_data:
+            return
+        
+        # 检查是否为本插件的回调
+        plugin_id = event_data.get("plugin_id")
+        if plugin_id != self.__class__.__name__:
+            return
+        
+        # 获取回调数据
+        text = event_data.get("text", "")
+        channel = event_data.get("channel")
+        source = event_data.get("source")
+        userid = event_data.get("userid")
+        
+        # 获取原始消息ID（用于更新原消息）
+        original_message_id = event_data.get("original_message_id")
+        original_chat_id = event_data.get("original_chat_id")
+        
+        logger.info(f"收到按钮回调: {text}, 用户: {userid}")
+        
+        try:
+            # 解析回调动作
+            if text.startswith("select_"):
+                # 选择搜索结果: select_1, select_2, ...
+                number = int(text.split("_")[1])
+                self.handle_resource_selection(number, channel, userid)
+                
+            elif text.startswith("transfer_"):
+                # 转存资源: transfer_1, transfer_2, ...
+                parts = text.split("_")
+                resource_id = int(parts[1])
+                self.handle_resource_transfer(resource_id, channel, userid)
+                
+            elif text.startswith("get_"):
+                # 获取指定类型资源: get_1_115, get_2_magnet, ...
+                parts = text.split("_")
+                number = int(parts[1])
+                resource_type = parts[2] if len(parts) > 2 else "115"
+                self.handle_get_resources(number, resource_type, channel, userid)
+                
+            elif text == "back":
+                # 返回操作
+                self.post_message(
+                    channel=channel,
+                    title="已返回",
+                    text="请发送搜索关键词（以？结尾）开始新的搜索",
+                    userid=userid
+                )
+                
+            else:
+                logger.warning(f"未知的回调动作: {text}")
+                
+        except Exception as e:
+            logger.error(f"处理按钮回调异常: {str(e)}")
+            self.post_message(
+                channel=channel,
+                title="错误",
+                text=f"处理操作时出现错误: {str(e)}",
+                userid=userid
+            )
+
     def search_and_reply(self, keyword: str, channel: str, userid: str):
         """执行搜索并回复结果"""
         try:
@@ -963,16 +1036,39 @@ class nullbr_search_pro(_PluginBase):
             
             if self._api_key:
                 reply_text += "📋 使用方法:\n"
-                reply_text += f"• 发送数字自动获取资源: 如 \"1\" (优先级: {' > '.join(self._resource_priority)})\n" 
+                reply_text += f"• 点击按钮或发送数字选择资源 (优先级: {' > '.join(self._resource_priority)})\n"
                 reply_text += "• 手动指定资源类型: 如 \"1.115\" \"2.magnet\" (可选)"
             else:
                 reply_text += "💡 提示: 请配置API_KEY以获取下载链接"
+            
+            # 构建按钮（最多显示5个按钮，每行2个）
+            buttons = []
+            items_count = min(len(result.get('items', [])), 5)
+            for i in range(1, items_count + 1, 2):
+                row = []
+                # 第一个按钮
+                item = result['items'][i - 1]
+                title_short = item.get('title', '未知')[:15]
+                row.append({
+                    "text": f"📥 {i}. {title_short}",
+                    "callback_data": f"[PLUGIN]{self.__class__.__name__}|select_{i}"
+                })
+                # 第二个按钮（如果存在）
+                if i < items_count:
+                    item2 = result['items'][i]
+                    title_short2 = item2.get('title', '未知')[:15]
+                    row.append({
+                        "text": f"📥 {i+1}. {title_short2}",
+                        "callback_data": f"[PLUGIN]{self.__class__.__name__}|select_{i+1}"
+                    })
+                buttons.append(row)
             
             self.post_message(
                 channel=channel,
                 title="Nullbr搜索结果",
                 text=reply_text,
-                userid=userid
+                userid=userid,
+                buttons=buttons if buttons else None
             )
             
             

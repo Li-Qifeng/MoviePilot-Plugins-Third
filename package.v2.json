@@ -16,19 +16,15 @@
     "name": "Nullbr资源搜索Pro",
     "description": "支持Nullbr API搜索影视资源，集成p115client/CloudDrive2实现115转存和磁力/ED2K离线下载",
     "labels": "资源,CloudDrive2,115,p115client",
-    "version": "1.6.0",
+    "version": "1.7.0",
     "icon": "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png",
     "author": "Li-Qifeng",
     "level": 1,
     "history": {
       "v1.0.0": "初始版本，基于nullbr_search重构，新增CloudDrive2支持（115转存/磁力离线/ED2K离线）",
-      "v1.1.0": "优化CloudDrive2认证，支持API Token和用户名密码双重认证方式",
-      "v1.2.0": "修复API 405错误，添加端点自动回退机制兼容不同版本CloudDrive2",
-      "v1.3.0": "修复gRPC-Web协议格式，使用正确的端点路径格式",
-      "v1.4.0": "使用原生gRPC协议重写客户端，完全兼容CloudDrive2官方API",
       "v1.5.0": "新增p115client支持，通过Cookie直接调用115 API实现分享链接转存",
-      "v1.5.3": "改回支持手动填写CID（优先），路径作为备用方案",
-      "v1.6.0": "精简配置：CD2只保留API Token和离线路径，115转存只用CID"
+      "v1.6.0": "精简配置：CD2只保留API Token和离线路径，115转存只用CID",
+      "v1.7.0": "新增按钮交互消息系统，支持Telegram/Slack等渠道的按钮回调交互"
     }
   }
 }
