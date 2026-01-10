@@ -1120,14 +1120,24 @@ class nullbr_search_pro(_PluginBase):
                     })
                 buttons.append(row)
             
-            self.post_message(
-                channel=channel,
-                title="Nullbr搜索结果",
-                text=reply_text,
-                userid=userid,
-                buttons=buttons if buttons else None
-            )
-            
+            # 尝试带按钮发送，如果不支持则降级为普通消息
+            try:
+                self.post_message(
+                    channel=channel,
+                    title="Nullbr搜索结果",
+                    text=reply_text,
+                    userid=userid,
+                    buttons=buttons if buttons else None
+                )
+            except TypeError:
+                # MoviePilot 版本不支持 buttons 参数，降级为普通消息
+                logger.info("当前 MoviePilot 版本不支持按钮交互，使用普通消息")
+                self.post_message(
+                    channel=channel,
+                    title="Nullbr搜索结果",
+                    text=reply_text,
+                    userid=userid
+                )
             
         except Exception as e:
             logger.error(f"搜索处理异常: {str(e)}")
