@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.7.0"
+    plugin_version = "1.8.0"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -237,8 +237,17 @@ class nullbr_search_pro(_PluginBase):
 
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
-        """获取插件命令"""
-        pass
+        """
+        注册插件远程命令
+        使用 /nullbr 关键词 触发搜索
+        """
+        return [{
+            "cmd": "/nullbr",
+            "event": EventType.PluginAction,
+            "desc": "Nullbr资源搜索",
+            "category": "资源搜索",
+            "data": {"action": "nullbr_search"}
+        }]
 
     def get_api(self) -> List[Dict[str, Any]]:
         """获取插件API"""
@@ -862,15 +871,48 @@ class nullbr_search_pro(_PluginBase):
             # 如果没有资源缓存，检查是否有搜索结果缓存
             logger.info(f"检测到编号选择: {number}")
             self.handle_resource_selection(number, channel, userid)
+
+    @eventmanager.register(EventType.PluginAction)
+    def handle_command(self, event: Event):
+        """
+        处理插件命令 /nullbr
+        用法: /nullbr 关键词
+        """
+        event_data = event.event_data
+        if not event_data:
+            return
         
-        # 检查是否为搜索请求（以？结尾，但不是数字或资源请求）
-        elif text.endswith('？') or text.endswith('?'):
-            # 提取搜索关键词（去掉问号）
-            keyword = clean_text
-            
-            if keyword:
-                logger.info(f"检测到搜索请求: {keyword}")
-                self.search_and_reply(keyword, channel, userid)
+        # 检查是否为本插件的命令
+        if event_data.get("action") != "nullbr_search":
+            return
+        
+        if not self._enabled:
+            return
+        
+        # 获取用户信息
+        channel = event_data.get("channel")
+        userid = event_data.get("user")
+        args = event_data.get("args", [])
+        
+        logger.info(f"收到 /nullbr 命令, 参数: {args}, 用户: {userid}")
+        
+        # 获取搜索关键词
+        keyword = " ".join(args) if args else None
+        
+        if not keyword:
+            # 没有关键词，发送使用说明
+            self.post_message(
+                channel=channel,
+                title="Nullbr资源搜索",
+                text="🔍 **使用方法**\n\n"
+                     "`/nullbr 影片名` - 搜索资源\n\n"
+                     "示例: `/nullbr 流浪地球`",
+                userid=userid
+            )
+            return
+        
+        # 执行搜索
+        self.search_and_reply(keyword, channel, userid)
 
     @eventmanager.register(EventType.MessageAction)
     def handle_message_action(self, event: Event):
