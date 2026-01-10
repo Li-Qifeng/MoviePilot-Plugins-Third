@@ -70,6 +70,11 @@ https://github.com/Li-Qifeng/MoviePilot-Plugins-Third
 
 ## 📝 更新日志
 
+### Pro版 v1.5.0 ✨
+- **重大更新**: 新增 p115client 支持，通过 Cookie 直接调用 115 API 实现分享链接转存
+- 解决 CloudDrive2 的 115open 不支持分享转存的问题
+- 双客户端架构: 115转存使用 p115client，磁力/ED2K 使用 CloudDrive2
+
 ### Pro版 v1.4.2
 - 修复模块导入问题，将生成代码中的绝对导入改为相对导入
 

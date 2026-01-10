@@ -14,9 +14,9 @@
   },
   "nullbr_search_pro": {
     "name": "Nullbr资源搜索Pro",
-    "description": "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载",
-    "labels": "资源,CloudDrive2,115",
-    "version": "1.4.3",
+    "description": "支持Nullbr API搜索影视资源，集成p115client/CloudDrive2实现115转存和磁力/ED2K离线下载",
+    "labels": "资源,CloudDrive2,115,p115client",
+    "version": "1.5.0",
     "icon": "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png",
     "author": "Li-Qifeng",
     "level": 1,
@@ -28,7 +28,8 @@
       "v1.4.0": "使用原生gRPC协议重写客户端，完全兼容CloudDrive2官方API",
       "v1.4.1": "修复Protobuf版本兼容问题，使用protobuf 5.x重新生成gRPC代码",
       "v1.4.2": "修复模块导入问题，将生成代码中的绝对导入改为相对导入",
-      "v1.4.3": "移除不存在的CloudDriveSystemSrvStub，统一使用CloudDriveFileSrvStub"
+      "v1.4.3": "移除不存在的CloudDriveSystemSrvStub，统一使用CloudDriveFileSrvStub",
+      "v1.5.0": "新增p115client支持，通过Cookie直接调用115 API实现分享链接转存，解决CD2 115open不支持转存的问题"
     }
   }
 }

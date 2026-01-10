@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.4.3"
+    plugin_version = "1.5.0"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -34,7 +34,7 @@ class nullbr_search_pro(_PluginBase):
         self._enable_ed2k = True
         self._search_timeout = 30
         
-        # CloudDrive2配置
+        # CloudDrive2配置 (用于磁力/ED2K离线)
         self._cd2_enabled = False
         self._cd2_url = ""
         self._cd2_api_token = ""                  # API Token（推荐）
@@ -43,9 +43,15 @@ class nullbr_search_pro(_PluginBase):
         self._cd2_save_path = "/115/Downloads"    # 115转存路径
         self._cd2_offline_path = "/115/Offline"   # 离线任务路径
         
+        # 115转存配置 (用于分享链接转存)
+        self._p115_enabled = False
+        self._p115_cookies = ""                   # 115 Cookie
+        self._p115_save_cid = "0"                 # 转存目标目录 CID
+        
         # 客户端实例
         self._client = None
         self._cd2_client = None
+        self._p115_client = None                  # 115分享转存客户端
         
         # 用户搜索结果缓存和资源缓存
         self._user_search_cache = {}  # {userid: {'results': [...], 'timestamp': time.time()}}
@@ -213,6 +219,27 @@ class nullbr_search_pro(_PluginBase):
                 self._cd2_client = None
         else:
             self._cd2_client = None
+        
+        # 初始化 115 分享转存客户端
+        self._p115_enabled = config.get("p115_enabled", False) if config else False
+        self._p115_cookies = config.get("p115_cookies", "") if config else ""
+        self._p115_save_cid = config.get("p115_save_cid", "0") if config else "0"
+        
+        if self._p115_enabled and self._p115_cookies:
+            try:
+                from .p115_client import P115ShareClient
+                self._p115_client = P115ShareClient(cookies=self._p115_cookies)
+                logger.info("115 分享转存客户端已初始化")
+            except ImportError:
+                logger.warning("p115client 未安装，115分享转存功能不可用。请安装: pip install p115client")
+                self._p115_client = None
+            except Exception as e:
+                logger.error(f"115 分享转存客户端初始化失败: {str(e)}")
+                self._p115_client = None
+        else:
+            self._p115_client = None
+            if self._p115_enabled and not self._p115_cookies:
+                logger.warning("115 分享转存已启用但未配置 Cookie")
 
     def get_state(self) -> bool:
         """获取插件状态"""
@@ -694,6 +721,88 @@ class nullbr_search_pro(_PluginBase):
                                                 ]
                                             }
                                         ]
+                                    },
+                                    {
+                                        'component': 'VRow',
+                                        'content': [
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12},
+                                                'content': [
+                                                    {
+                                                        'component': 'VAlert',
+                                                        'props': {
+                                                            'type': 'warning',
+                                                            'variant': 'tonal'
+                                                        },
+                                                        'content': [
+                                                            {
+                                                                'component': 'span',
+                                                                'text': '🔄 115分享链接转存配置 - 使用Cookie直接调用115 API（推荐）'
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        'component': 'VRow',
+                                        'content': [
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 4},
+                                                'content': [
+                                                    {
+                                                        'component': 'VSwitch',
+                                                        'props': {
+                                                            'model': 'p115_enabled',
+                                                            'label': '启用115转存',
+                                                            'hint': '开启后支持115分享链接转存',
+                                                            'persistent-hint': True
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12, 'md': 4},
+                                                'content': [
+                                                    {
+                                                        'component': 'VTextField',
+                                                        'props': {
+                                                            'model': 'p115_save_cid',
+                                                            'label': '转存目录CID',
+                                                            'placeholder': '0',
+                                                            'hint': '0表示根目录，可在浏览器URL中获取',
+                                                            'persistent-hint': True
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        'component': 'VRow',
+                                        'content': [
+                                            {
+                                                'component': 'VCol',
+                                                'props': {'cols': 12},
+                                                'content': [
+                                                    {
+                                                        'component': 'VTextarea',
+                                                        'props': {
+                                                            'model': 'p115_cookies',
+                                                            'label': '115 Cookie',
+                                                            'placeholder': 'UID=xxx; CID=xxx; SEID=xxx; KID=xxx',
+                                                            'hint': '从浏览器开发者工具获取，格式: UID=xxx; CID=xxx; SEID=xxx',
+                                                            'persistent-hint': True,
+                                                            'rows': 2
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        ]
                                     }
                                     ]
                                 }
@@ -726,7 +835,10 @@ class nullbr_search_pro(_PluginBase):
         "cd2_password": "",
         "cd2_save_path": "/115/Downloads",
         "cd2_offline_path": "/115/Offline",
-        "search_timeout": 30
+        "search_timeout": 30,
+        "p115_enabled": False,
+        "p115_cookies": "",
+        "p115_save_cid": "0"
         }
 
     def get_page(self) -> List[dict]:
@@ -1219,18 +1331,13 @@ class nullbr_search_pro(_PluginBase):
             )
 
     def handle_resource_transfer(self, resource_id: int, channel: str, userid: str):
-        """处理资源转存/离线请求"""
+        """处理资源转存/离线请求
+        
+        资源处理策略：
+        - 115分享链接: 优先使用 p115client (Cookie认证)
+        - 磁力/ED2K: 使用 CloudDrive2 (gRPC)
+        """
         try:
-            # 检查CloudDrive2是否启用
-            if not self._cd2_enabled or not self._cd2_client:
-                self.post_message(
-                    channel=channel,
-                    title="功能未启用",
-                    text="CloudDrive2功能未启用，请在设置中配置。",
-                    userid=userid
-                )
-                return
-            
             # 获取用户资源缓存
             cache = self._user_resource_cache.get(userid)
             if not cache or time.time() - cache['timestamp'] > 3600:
@@ -1263,58 +1370,18 @@ class nullbr_search_pro(_PluginBase):
             
             # 根据资源类型选择处理方式
             if resource_type == "115":
-                # 115分享链接转存
-                logger.info(f"开始CD2转存: 用户={userid}, 资源={resource_title}, URL={resource_url}")
-                
-                self._stats['cd2_transfers'] += 1
-                self._stats['last_transfer_time'] = time.time()
-                
-                self.post_message(
-                    channel=channel,
-                    title="转存中",
-                    text=f"🚀 正在转存「{title}」中的资源:\n\n"
-                         f"📁 {resource_title}\n"
-                         f"📊 大小: {resource_size}\n\n"
-                         f"⏳ 请稍等，正在处理中...",
-                    userid=userid
+                # 115分享链接转存 - 使用 p115client
+                self._handle_115_transfer(
+                    resource_url, resource_title, resource_size, 
+                    title, channel, userid
                 )
-                
-                # 调用CloudDrive2 API进行转存
-                result = self._cd2_client.add_shared_link(
-                    share_url=resource_url,
-                    to_folder=self._cd2_save_path
-                )
-                
-                # 处理转存结果
-                self._handle_cd2_result(result, title, resource_title, resource_size, "转存", channel, userid)
                 
             elif resource_type in ["magnet", "ed2k"]:
-                # 磁力/ED2K离线任务
-                logger.info(f"开始CD2离线: 用户={userid}, 资源={resource_title}, 类型={resource_type}")
-                
-                self._stats['cd2_offline'] += 1
-                self._stats['last_transfer_time'] = time.time()
-                
-                task_type = "磁力" if resource_type == "magnet" else "ED2K"
-                
-                self.post_message(
-                    channel=channel,
-                    title="添加离线任务",
-                    text=f"🚀 正在添加「{title}」的{task_type}离线任务:\n\n"
-                         f"📁 {resource_title}\n"
-                         f"📊 大小: {resource_size}\n\n"
-                         f"⏳ 请稍等，正在处理中...",
-                    userid=userid
+                # 磁力/ED2K离线任务 - 使用 CloudDrive2
+                self._handle_offline_task(
+                    resource_url, resource_title, resource_size,
+                    resource_type, title, channel, userid
                 )
-                
-                # 调用CloudDrive2 API添加离线任务
-                result = self._cd2_client.add_offline_files(
-                    urls=resource_url,
-                    to_folder=self._cd2_offline_path
-                )
-                
-                # 处理离线结果
-                self._handle_cd2_result(result, title, resource_title, resource_size, f"{task_type}离线", channel, userid)
                 
             else:
                 # 不支持的资源类型
@@ -1331,9 +1398,147 @@ class nullbr_search_pro(_PluginBase):
             self.post_message(
                 channel=channel,
                 title="处理错误",
-                text=f"❌ 处理过程中发生错误:\n\n{str(e)}\n\n💡 请检查CloudDrive2配置和网络连接",
+                text=f"❌ 处理过程中发生错误:\n\n{str(e)}\n\n💡 请检查配置和网络连接",
                 userid=userid
             )
+    
+    def _handle_115_transfer(self, resource_url: str, resource_title: str, 
+                             resource_size: str, title: str, channel: str, userid: str):
+        """处理 115 分享链接转存 - 使用 p115client"""
+        
+        # 检查 p115client 是否可用
+        if not self._p115_client:
+            # 如果 p115client 不可用，尝试回退到 CloudDrive2
+            if self._cd2_enabled and self._cd2_client:
+                logger.warning("p115client 不可用，尝试使用 CloudDrive2")
+                try:
+                    self.post_message(
+                        channel=channel,
+                        title="转存中",
+                        text=f"🚀 正在转存「{title}」中的资源:\n\n"
+                             f"📁 {resource_title}\n"
+                             f"📊 大小: {resource_size}\n\n"
+                             f"⏳ 使用 CloudDrive2 处理中...",
+                        userid=userid
+                    )
+                    
+                    result = self._cd2_client.add_shared_link(
+                        share_url=resource_url,
+                        to_folder=self._cd2_save_path
+                    )
+                    self._handle_cd2_result(result, title, resource_title, resource_size, "转存", channel, userid)
+                    return
+                except Exception as e:
+                    error_msg = str(e)
+                    if "not supported" in error_msg.lower() or "115open" in error_msg.lower():
+                        self.post_message(
+                            channel=channel,
+                            title="功能不支持",
+                            text="❌ CloudDrive2 的 115open 不支持分享链接转存\n\n"
+                                 "💡 请在插件设置中配置 **115 Cookie** 以启用分享链接转存功能",
+                            userid=userid
+                        )
+                    else:
+                        raise
+                    return
+            
+            # 都不可用
+            self.post_message(
+                channel=channel,
+                title="功能未启用",
+                text="❌ 115 分享链接转存功能未启用\n\n"
+                     "💡 请在插件设置中配置 **115 Cookie** 以启用此功能",
+                userid=userid
+            )
+            return
+        
+        # 使用 p115client 转存
+        logger.info(f"开始115转存: 用户={userid}, 资源={resource_title}, URL={resource_url}")
+        
+        self._stats['cd2_transfers'] += 1
+        self._stats['last_transfer_time'] = time.time()
+        
+        self.post_message(
+            channel=channel,
+            title="转存中",
+            text=f"🚀 正在转存「{title}」中的资源:\n\n"
+                 f"📁 {resource_title}\n"
+                 f"📊 大小: {resource_size}\n\n"
+                 f"⏳ 使用 p115client 处理中...",
+            userid=userid
+        )
+        
+        try:
+            result = self._p115_client.save_share_link(
+                share_url=resource_url,
+                to_folder_cid=self._p115_save_cid
+            )
+            
+            # 转存成功
+            self.post_message(
+                channel=channel,
+                title="✅ 转存成功",
+                text=f"🎉 「{title}」资源转存成功!\n\n"
+                     f"📁 {resource_title}\n"
+                     f"📊 大小: {resource_size}\n"
+                     f"📂 保存位置: 115网盘 (CID: {self._p115_save_cid})\n\n"
+                     f"💡 {result.get('message', '')}",
+                userid=userid
+            )
+            
+        except ValueError as e:
+            # 业务错误（链接过期、密码错误等）
+            self.post_message(
+                channel=channel,
+                title="转存失败",
+                text=f"❌ 转存失败: {str(e)}\n\n"
+                     f"📁 {resource_title}",
+                userid=userid
+            )
+        except Exception as e:
+            logger.error(f"115 转存异常: {str(e)}")
+            raise
+    
+    def _handle_offline_task(self, resource_url: str, resource_title: str,
+                             resource_size: str, resource_type: str, 
+                             title: str, channel: str, userid: str):
+        """处理磁力/ED2K 离线任务 - 使用 CloudDrive2"""
+        
+        # 检查 CloudDrive2 是否可用
+        if not self._cd2_enabled or not self._cd2_client:
+            self.post_message(
+                channel=channel,
+                title="功能未启用",
+                text="❌ CloudDrive2 离线功能未启用\n\n"
+                     "💡 请在插件设置中配置 CloudDrive2 以使用磁力/ED2K离线功能",
+                userid=userid
+            )
+            return
+        
+        task_type = "磁力" if resource_type == "magnet" else "ED2K"
+        logger.info(f"开始离线: 用户={userid}, 资源={resource_title}, 类型={resource_type}")
+        
+        self._stats['cd2_offline'] += 1
+        self._stats['last_transfer_time'] = time.time()
+        
+        self.post_message(
+            channel=channel,
+            title="添加离线任务",
+            text=f"🚀 正在添加「{title}」的{task_type}离线任务:\n\n"
+                 f"📁 {resource_title}\n"
+                 f"📊 大小: {resource_size}\n\n"
+                 f"⏳ 请稍等，正在处理中...",
+            userid=userid
+        )
+        
+        # 调用 CloudDrive2 API 添加离线任务
+        result = self._cd2_client.add_offline_files(
+            urls=resource_url,
+            to_folder=self._cd2_offline_path
+        )
+        
+        # 处理离线结果
+        self._handle_cd2_result(result, title, resource_title, resource_size, f"{task_type}离线", channel, userid)
     
     def _handle_cd2_result(self, result: dict, title: str, resource_title: str, 
                            resource_size: str, action_type: str, channel: str, userid: str):
