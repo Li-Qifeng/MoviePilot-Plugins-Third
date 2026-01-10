@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.5.3"
+    plugin_version = "1.6.0"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -34,20 +34,16 @@ class nullbr_search_pro(_PluginBase):
         self._enable_ed2k = True
         self._search_timeout = 30
         
-        # CloudDrive2配置 (用于磁力/ED2K离线)
+        # CloudDrive2配置 (仅用于磁力/ED2K离线)
         self._cd2_enabled = False
         self._cd2_url = ""
-        self._cd2_api_token = ""                  # API Token（推荐）
-        self._cd2_username = ""                   # 用户名（备用）
-        self._cd2_password = ""                   # 密码（备用）
-        self._cd2_save_path = "/115/Downloads"    # 115转存路径
+        self._cd2_api_token = ""                  # API Token
         self._cd2_offline_path = "/115/Offline"   # 离线任务路径
         
         # 115转存配置 (用于分享链接转存)
         self._p115_enabled = False
         self._p115_cookies = ""                   # 115 Cookie
-        self._p115_save_cid = ""                  # 转存目标 CID（优先）
-        self._p115_save_path = "/我的接收"          # 转存目标路径（备用）
+        self._p115_save_cid = ""                  # 转存目标 CID
         
         # 客户端实例
         self._client = None
@@ -171,15 +167,11 @@ class nullbr_search_pro(_PluginBase):
             self._cd2_enabled = config.get("cd2_enabled", False)
             self._cd2_url = config.get("cd2_url", "")
             self._cd2_api_token = config.get("cd2_api_token", "")
-            self._cd2_username = config.get("cd2_username", "")
-            self._cd2_password = config.get("cd2_password", "")
-            self._cd2_save_path = config.get("cd2_save_path", "/115/Downloads")
             self._cd2_offline_path = config.get("cd2_offline_path", "/115/Offline")
             
             logger.info(f"Nullbr资源优先级设置: {' > '.join(self._resource_priority)}")
             if self._cd2_enabled:
-                auth_mode = "API Token" if self._cd2_api_token else "用户名密码"
-                logger.info(f"CloudDrive2已启用: {self._cd2_url} (认证模式: {auth_mode})")
+                logger.info(f"CloudDrive2已启用: {self._cd2_url}")
         
         # 初始化API客户端
         if self._enabled and self._app_id:
@@ -195,28 +187,22 @@ class nullbr_search_pro(_PluginBase):
                 logger.warning("Nullbr插件配置错误: 缺少APP_ID")
             self._client = None
         
-        # 初始化CloudDrive2客户端
-        # 支持两种认证方式: API Token (优先) 或 用户名密码
+        # 初始化CloudDrive2客户端 (仅支持 API Token)
         if self._cd2_enabled and self._cd2_url:
-            has_api_token = bool(self._cd2_api_token)
-            has_password_auth = bool(self._cd2_username and self._cd2_password)
-            
-            if has_api_token or has_password_auth:
+            if self._cd2_api_token:
                 try:
                     from .clouddrive_client import CloudDrive2Client
                     self._cd2_client = CloudDrive2Client(
                         base_url=self._cd2_url,
-                        username=self._cd2_username if not has_api_token else None,
-                        password=self._cd2_password if not has_api_token else None,
-                        api_token=self._cd2_api_token if has_api_token else None
+                        api_token=self._cd2_api_token
                     )
-                    logger.info(f"CloudDrive2客户端已初始化 (认证模式: {self._cd2_client.auth_mode})")
+                    logger.info("CloudDrive2客户端已初始化")
                 except Exception as e:
                     logger.error(f"CloudDrive2初始化失败: {str(e)}")
                     self._cd2_enabled = False
                     self._cd2_client = None
             else:
-                logger.warning("CloudDrive2配置不完整: 需要 API Token 或 用户名密码")
+                logger.warning("CloudDrive2配置不完整: 需要 API Token")
                 self._cd2_client = None
         else:
             self._cd2_client = None
@@ -225,18 +211,15 @@ class nullbr_search_pro(_PluginBase):
         self._p115_enabled = config.get("p115_enabled", False) if config else False
         self._p115_cookies = config.get("p115_cookies", "") if config else ""
         self._p115_save_cid = config.get("p115_save_cid", "") if config else ""
-        self._p115_save_path = config.get("p115_save_path", "/我的接收") if config else "/我的接收"
         
         if self._p115_enabled and self._p115_cookies:
             try:
                 from .p115_client import P115ShareClient
                 self._p115_client = P115ShareClient(
                     cookies=self._p115_cookies,
-                    save_cid=self._p115_save_cid,  # CID 优先
-                    save_path=self._p115_save_path  # 路径备用
+                    save_cid=self._p115_save_cid
                 )
-                target = self._p115_save_cid if self._p115_save_cid else self._p115_save_path
-                logger.info(f"115 分享转存客户端已初始化，目标: {target}")
+                logger.info(f"115 分享转存客户端已初始化，目标 CID: {self._p115_save_cid or '0'}")
             except ImportError:
                 logger.warning("p115client 未安装，115分享转存功能不可用。请安装: pip install p115client")
                 self._p115_client = None
@@ -627,45 +610,6 @@ class nullbr_search_pro(_PluginBase):
                                                         }
                                                     }
                                                 ]
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        'component': 'VRow',
-                                        'content': [
-                                            {
-                                                'component': 'VCol',
-                                                'props': {'cols': 12, 'md': 6},
-                                                'content': [
-                                                    {
-                                                        'component': 'VTextField',
-                                                        'props': {
-                                                            'model': 'cd2_username',
-                                                            'label': 'CD2用户名（备选）',
-                                                            'placeholder': 'API Token为空时使用',
-                                                            'hint': '备选: 无API Token时填写',
-                                                            'persistent-hint': True
-                                                        }
-                                                    }
-                                                ]
-                                            },
-                                            {
-                                                'component': 'VCol',
-                                                'props': {'cols': 12, 'md': 6},
-                                                'content': [
-                                                    {
-                                                        'component': 'VTextField',
-                                                        'props': {
-                                                            'model': 'cd2_password',
-                                                            'label': 'CD2密码（备选）',
-                                                            'placeholder': 'API Token为空时使用',
-                                                            'hint': '备选: 无API Token时填写',
-                                                            'persistent-hint': True,
-                                                            'type': 'password'
-                                                        }
-                                                    }
-                                                ]
-                                            }
                                         ]
                                     },
                                     {
@@ -695,22 +639,6 @@ class nullbr_search_pro(_PluginBase):
                                     {
                                         'component': 'VRow',
                                         'content': [
-                                            {
-                                                'component': 'VCol',
-                                                'props': {'cols': 12, 'md': 6},
-                                                'content': [
-                                                    {
-                                                        'component': 'VTextField',
-                                                        'props': {
-                                                            'model': 'cd2_save_path',
-                                                            'label': '115转存路径',
-                                                            'placeholder': '/115/Downloads',
-                                                            'hint': '115分享链接转存的目标路径',
-                                                            'persistent-hint': True
-                                                        }
-                                                    }
-                                                ]
-                                            },
                                             {
                                                 'component': 'VCol',
                                                 'props': {'cols': 12, 'md': 6},
@@ -773,31 +701,15 @@ class nullbr_search_pro(_PluginBase):
                                             },
                                             {
                                                 'component': 'VCol',
-                                                'props': {'cols': 12, 'md': 4},
+                                                'props': {'cols': 12, 'md': 8},
                                                 'content': [
                                                     {
                                                         'component': 'VTextField',
                                                         'props': {
                                                             'model': 'p115_save_cid',
-                                                            'label': '转存目录CID（推荐）',
+                                                            'label': '转存目录CID',
                                                             'placeholder': '如: 3338283296615502143',
-                                                            'hint': '优先使用，在浏览器打开目录后从URL获取cid参数',
-                                                            'persistent-hint': True
-                                                        }
-                                                    }
-                                                ]
-                                            },
-                                            {
-                                                'component': 'VCol',
-                                                'props': {'cols': 12, 'md': 4},
-                                                'content': [
-                                                    {
-                                                        'component': 'VTextField',
-                                                        'props': {
-                                                            'model': 'p115_save_path',
-                                                            'label': '转存目录路径（备用）',
-                                                            'placeholder': '/我的接收',
-                                                            'hint': '仅当CID为空时使用',
+                                                            'hint': '在浏览器打开目录后从URL获取cid参数，0表示根目录',
                                                             'persistent-hint': True
                                                         }
                                                     }
@@ -854,15 +766,11 @@ class nullbr_search_pro(_PluginBase):
         "cd2_enabled": False,
         "cd2_url": "",
         "cd2_api_token": "",
-        "cd2_username": "",
-        "cd2_password": "",
-        "cd2_save_path": "/115/Downloads",
         "cd2_offline_path": "/115/Offline",
         "search_timeout": 30,
         "p115_enabled": False,
         "p115_cookies": "",
-        "p115_save_cid": "",
-        "p115_save_path": "/我的接收"
+        "p115_save_cid": ""
         }
 
     def get_page(self) -> List[dict]:
@@ -1504,7 +1412,7 @@ class nullbr_search_pro(_PluginBase):
                 text=f"🎉 「{title}」资源转存成功!\n\n"
                      f"📁 {resource_title}\n"
                      f"📊 大小: {resource_size}\n"
-                     f"📂 保存位置: CID={self._p115_save_cid or '0'}({self._p115_save_path})\n\n"
+                     f"📂 保存位置: CID={self._p115_save_cid or '0'}\n\n"
                      f"💡 {result.get('message', '')}",
                 userid=userid
             )

@@ -16,23 +16,19 @@
     "name": "Nullbr资源搜索Pro",
     "description": "支持Nullbr API搜索影视资源，集成p115client/CloudDrive2实现115转存和磁力/ED2K离线下载",
     "labels": "资源,CloudDrive2,115,p115client",
-    "version": "1.5.3",
+    "version": "1.6.0",
     "icon": "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png",
     "author": "Li-Qifeng",
     "level": 1,
     "history": {
       "v1.0.0": "初始版本，基于nullbr_search重构，新增CloudDrive2支持（115转存/磁力离线/ED2K离线）",
-      "v1.1.0": "优化CloudDrive2认证，支持API Token（推荐）和用户名密码双重认证方式",
+      "v1.1.0": "优化CloudDrive2认证，支持API Token和用户名密码双重认证方式",
       "v1.2.0": "修复API 405错误，添加端点自动回退机制兼容不同版本CloudDrive2",
-      "v1.3.0": "修复gRPC-Web协议格式，使用正确的端点路径格式 /服务名/方法名",
+      "v1.3.0": "修复gRPC-Web协议格式，使用正确的端点路径格式",
       "v1.4.0": "使用原生gRPC协议重写客户端，完全兼容CloudDrive2官方API",
-      "v1.4.1": "修复Protobuf版本兼容问题，使用protobuf 5.x重新生成gRPC代码",
-      "v1.4.2": "修复模块导入问题，将生成代码中的绝对导入改为相对导入",
-      "v1.4.3": "移除不存在的CloudDriveSystemSrvStub，统一使用CloudDriveFileSrvStub",
       "v1.5.0": "新增p115client支持，通过Cookie直接调用115 API实现分享链接转存",
-      "v1.5.1": "修复fid字段问题，增加详细调试日志，支持文件夹路径自动获取CID",
-      "v1.5.2": "增加Cookie验证(必须包含UID/CID/SEID)，增加登录状态验证，改进错误提示",
-      "v1.5.3": "改回支持手动填写CID（优先），路径作为备用方案"
+      "v1.5.3": "改回支持手动填写CID（优先），路径作为备用方案",
+      "v1.6.0": "精简配置：CD2只保留API Token和离线路径，115转存只用CID"
     }
   }
 }
