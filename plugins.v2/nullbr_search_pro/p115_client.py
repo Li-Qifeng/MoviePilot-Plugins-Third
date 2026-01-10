@@ -330,7 +330,7 @@ class P115ShareClient:
         else:
             target_cid = self._save_cid or "0"
         
-        logger.info(f"115 转存分享链接: {share_code[:10]}... -> 路径={to_folder_path or self.save_path}, CID={target_cid}")
+        logger.info(f"115 转存分享链接: {share_code[:10]}... -> CID={target_cid}")
         
         try:
             # 1. 获取分享信息
@@ -395,7 +395,7 @@ class P115ShareClient:
             
             return {
                 "success": True,
-                "message": f"成功转存 {len(file_ids)} 个文件到 {to_folder_path or self.save_path}",
+                "message": f"成功转存 {len(file_ids)} 个文件到 CID: {target_cid}",
                 "file_count": len(file_ids),
                 "share_code": share_code
             }

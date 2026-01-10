@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.9.0"
+    plugin_version = "2.0.0"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -267,6 +267,28 @@ class nullbr_search_pro(_PluginBase):
     def get_api(self) -> List[Dict[str, Any]]:
         """获取插件API"""
         pass
+
+    def _is_button_supported(self, channel) -> bool:
+        """
+        判断渠道是否支持按钮交互
+        
+        :param channel: 消息渠道
+        :return: 是否支持按钮
+        """
+        if not channel:
+            return False
+        
+        # 获取渠道名称（可能是字符串或对象）
+        channel_name = str(channel).lower() if channel else ""
+        
+        # 支持按钮的平台列表
+        button_platforms = ["telegram", "slack"]
+        
+        for platform in button_platforms:
+            if platform in channel_name:
+                return True
+        
+        return False
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         """
@@ -892,6 +914,11 @@ class nullbr_search_pro(_PluginBase):
             # 如果没有资源缓存，检查是否有搜索结果缓存
             logger.info(f"检测到编号选择: #{number}")
             self.handle_resource_selection(number, channel, userid)
+        
+        # 不是数字也不是资源类型请求，作为搜索关键词处理
+        elif clean_text:
+            logger.info(f"检测到搜索请求: #{clean_text}")
+            self.search_and_reply(clean_text, channel, userid)
 
     @eventmanager.register(EventType.PluginAction)
     def handle_command(self, event: Event):
@@ -1008,7 +1035,12 @@ class nullbr_search_pro(_PluginBase):
     
     def _handle_help_command(self, channel, userid: str):
         """处理帮助命令 /nullbr_help"""
-        help_text = """🔍 **Nullbr资源搜索Pro 使用帮助**
+        # 判断是否支持按钮的平台
+        is_button_platform = self._is_button_supported(channel)
+        
+        if is_button_platform:
+            # Telegram/Slack 等支持按钮的平台
+            help_text = """🔍 **Nullbr资源搜索Pro 使用帮助**
 
 **📋 命令列表**
 
@@ -1019,7 +1051,19 @@ class nullbr_search_pro(_PluginBase):
 
 `/nullbr_help` - 显示帮助信息
 
-**📝 选择资源**
+**💡 提示**
+- 搜索后点击按钮选择结果
+- 115 链接支持自动转存
+- 磁力/ED2K 链接支持离线下载
+"""
+        else:
+            # 企业微信等不支持按钮的平台，使用 # 前缀
+            help_text = """🔍 **Nullbr资源搜索Pro 使用帮助**
+
+**📋 搜索与交互**
+
+`#影片名` - 搜索资源
+  示例: `#流浪地球`
 
 `#数字` - 选择搜索结果
   示例: `#1` 选择第1个结果
@@ -1028,8 +1072,13 @@ class nullbr_search_pro(_PluginBase):
   示例: `#1.115` 获取115链接
   类型: 115, magnet, ed2k, video
 
+**📋 其他命令**
+
+`/nullbr_offline` - 查询离线任务状态
+
+`/nullbr_help` - 显示帮助信息
+
 **💡 提示**
-- 搜索结果按优先级自动获取资源
 - 115 链接支持自动转存
 - 磁力/ED2K 链接支持离线下载
 """
