@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "1.8.0"
+    plugin_version = "1.9.0"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -818,16 +818,22 @@ class nullbr_search_pro(_PluginBase):
             logger.info("检测到回退搜索消息，跳过处理避免循环")
             return
         
-        # 先检查是否为获取资源的请求（包含问号的情况，如 "1.115?" "2.magnet?"）
-        clean_text = text.rstrip('？?').strip()
+        # 检查是否为 Nullbr 插件的交互命令（以 # 开头）
+        if not text.startswith('#'):
+            return  # 不是插件交互，跳过
+        
+        # 去掉 # 前缀
+        clean_text = text[1:].strip()
+        
+        # 检查是否为获取资源的请求（如 "#1.115" "#2.magnet"）
         if re.match(r'^\d+\.(115|magnet|video|ed2k)$', clean_text):
             parts = clean_text.split('.')
             number = int(parts[0])
             resource_type = parts[1]
-            logger.info(f"检测到资源获取请求: {number}.{resource_type}")
+            logger.info(f"检测到资源获取请求: #{number}.{resource_type}")
             self.handle_get_resources(number, resource_type, channel, userid)
         
-        # 检查是否为编号选择（纯数字，包含问号的情况）
+        # 检查是否为编号选择（如 "#1" "#2"）
         elif clean_text.isdigit():
             number = int(clean_text)
             
@@ -837,7 +843,7 @@ class nullbr_search_pro(_PluginBase):
                 if time.time() - cache['timestamp'] < 3600:  # 1小时内有效
                     if 1 <= number <= len(cache['resources']):
                         if self._cd2_enabled and self._cd2_client:
-                            logger.info(f"检测到资源转存请求: {number}")
+                            logger.info(f"检测到资源转存请求: #{number}")
                             self.handle_resource_transfer(number, channel, userid)
                         else:
                             # 有资源缓存但CD2未启用，显示资源详情和提示
@@ -863,13 +869,13 @@ class nullbr_search_pro(_PluginBase):
                         self.post_message(
                             channel=channel,
                             title="编号错误",
-                            text=f"请输入有效的资源编号 (1-{len(cache['resources'])})。",
+                            text=f"请输入有效的资源编号 (#1 - #{len(cache['resources'])})。",
                             userid=userid
                         )
                         return
             
             # 如果没有资源缓存，检查是否有搜索结果缓存
-            logger.info(f"检测到编号选择: {number}")
+            logger.info(f"检测到编号选择: #{number}")
             self.handle_resource_selection(number, channel, userid)
 
     @eventmanager.register(EventType.PluginAction)
@@ -1093,8 +1099,8 @@ class nullbr_search_pro(_PluginBase):
             
             if self._api_key:
                 reply_text += "📋 使用方法:\n"
-                reply_text += f"• 点击按钮或发送数字选择资源 (优先级: {' > '.join(self._resource_priority)})\n"
-                reply_text += "• 手动指定资源类型: 如 \"1.115\" \"2.magnet\" (可选)"
+                reply_text += f"• 发送 #数字 选择资源: 如 \"#1\" (优先级: {' > '.join(self._resource_priority)})\n"
+                reply_text += "• 手动指定资源类型: 如 \"#1.115\" \"#2.magnet\" (可选)"
             else:
                 reply_text += "💡 提示: 请配置API_KEY以获取下载链接"
             
