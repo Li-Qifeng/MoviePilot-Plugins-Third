@@ -892,12 +892,27 @@ class nullbr_search_pro(_PluginBase):
         # 获取用户信息
         channel = event_data.get("channel")
         userid = event_data.get("user")
+        
+        # 尝试多种方式获取搜索关键词
+        keyword = None
+        
+        # 方式1: 从 args 列表获取
         args = event_data.get("args", [])
+        if args:
+            keyword = " ".join(args)
         
-        logger.info(f"收到 /nullbr 命令, 参数: {args}, 用户: {userid}")
+        # 方式2: 从 text 字段提取 (格式: "/nullbr 关键词")
+        if not keyword:
+            text = event_data.get("text", "")
+            if text and text.startswith("/nullbr"):
+                # 去掉命令前缀，提取关键词
+                keyword = text[7:].strip()  # 去掉 "/nullbr"
         
-        # 获取搜索关键词
-        keyword = " ".join(args) if args else None
+        # 方式3: 从 arg_str 字段获取
+        if not keyword:
+            keyword = event_data.get("arg_str", "").strip()
+        
+        logger.info(f"收到 /nullbr 命令, 关键词: {keyword}, 用户: {userid}, event_data: {event_data}")
         
         if not keyword:
             # 没有关键词，发送使用说明
