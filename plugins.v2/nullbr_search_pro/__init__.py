@@ -1006,15 +1006,35 @@ class nullbr_search_pro(_PluginBase):
                 )
                 return
             
+            # 离线任务状态码映射
+            status_map = {
+                0: "等待中",
+                1: "下载中",
+                2: "已完成",
+                3: "失败",
+                4: "暂停中",
+                5: "已取消",
+            }
+            
             # 格式化任务列表
             text = f"📥 离线任务列表 (共 {len(tasks)} 个)\n\n"
             for i, task in enumerate(tasks[:10], 1):
                 # 从 gRPC 对象中获取属性
                 name = getattr(task, 'name', '未知')[:30] if hasattr(task, 'name') else str(task)[:30]
                 progress = getattr(task, 'percent', 0) if hasattr(task, 'percent') else 0
-                status = getattr(task, 'status', '未知') if hasattr(task, 'status') else '未知'
+                status_code = getattr(task, 'status', -1) if hasattr(task, 'status') else -1
+                
+                # 将状态码转换为可读文本
+                if isinstance(status_code, int):
+                    status_text = status_map.get(status_code, f"未知({status_code})")
+                else:
+                    status_text = str(status_code)
+                
+                # 根据状态添加对应图标
+                status_icon = "✅" if status_code == 2 else "⏳" if status_code in [0, 1] else "❌" if status_code == 3 else "⏸️"
+                
                 text += f"**{i}.** {name}\n"
-                text += f"   📊 进度: {progress}% | 状态: {status}\n"
+                text += f"   📊 进度: {progress}% | {status_icon} {status_text}\n"
             
             if len(tasks) > 10:
                 text += f"\n... 还有 {len(tasks) - 10} 个任务"
