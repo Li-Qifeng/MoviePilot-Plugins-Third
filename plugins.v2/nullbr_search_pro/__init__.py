@@ -992,8 +992,9 @@ class nullbr_search_pro(_PluginBase):
             return
         
         try:
-            # 使用 get_offline_status 获取离线任务列表
-            result = self._cd2_client.get_offline_status()
+            # 使用配置的离线路径获取离线任务列表
+            offline_path = getattr(self, '_cd2_offline_path', '/115/Offline')
+            result = self._cd2_client.get_offline_status(path=offline_path)
             tasks = result.get('offlineFiles', [])
             
             if not tasks:
