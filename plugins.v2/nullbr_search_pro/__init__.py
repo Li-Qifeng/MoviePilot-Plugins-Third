@@ -14,7 +14,7 @@ class nullbr_search_pro(_PluginBase):
     plugin_name = "Nullbr资源搜索Pro"
     plugin_desc = "支持Nullbr API搜索影视资源，集成CloudDrive2实现115转存和磁力/ED2K离线下载"
     plugin_icon = "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png"
-    plugin_version = "2.0.0"
+    plugin_version = "2.0.1"
     plugin_author = "Li-Qifeng"
     author_url = "https://github.com/Li-Qifeng"
     plugin_config_prefix = "nullbr_search_pro_"
@@ -1019,9 +1019,13 @@ class nullbr_search_pro(_PluginBase):
             # 格式化任务列表
             text = f"📥 离线任务列表 (共 {len(tasks)} 个)\n\n"
             for i, task in enumerate(tasks[:10], 1):
-                # 从 gRPC 对象中获取属性
+                # 从 gRPC 对象中获取属性（注意 protobuf 中的拼写）
                 name = getattr(task, 'name', '未知')[:30] if hasattr(task, 'name') else str(task)[:30]
-                progress = getattr(task, 'percent', 0) if hasattr(task, 'percent') else 0
+                # percendDone 是 protobuf 中的实际字段名（注意拼写）
+                progress = getattr(task, 'percendDone', 0) if hasattr(task, 'percendDone') else 0
+                # 获取文件大小
+                size_bytes = getattr(task, 'size', 0) if hasattr(task, 'size') else 0
+                size_str = self._format_size(size_bytes) if size_bytes > 0 else ""
                 status_code = getattr(task, 'status', -1) if hasattr(task, 'status') else -1
                 
                 # 将状态码转换为可读文本
@@ -1033,8 +1037,14 @@ class nullbr_search_pro(_PluginBase):
                 # 根据状态添加对应图标
                 status_icon = "✅" if status_code == 2 else "⏳" if status_code in [0, 1] else "❌" if status_code == 3 else "⏸️"
                 
+                # 格式化进度（百分比显示）
+                progress_str = f"{progress:.1f}%" if isinstance(progress, float) else f"{progress}%"
+                
                 text += f"**{i}.** {name}\n"
-                text += f"   📊 进度: {progress}% | {status_icon} {status_text}\n"
+                if size_str:
+                    text += f"   💾 {size_str} | {status_icon} {status_text} | 📊 {progress_str}\n"
+                else:
+                    text += f"   {status_icon} {status_text} | 📊 {progress_str}\n"
             
             if len(tasks) > 10:
                 text += f"\n... 还有 {len(tasks) - 10} 个任务"

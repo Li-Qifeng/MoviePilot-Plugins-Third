@@ -16,7 +16,7 @@
     "name": "Nullbr资源搜索Pro",
     "description": "支持Nullbr API搜索影视资源，集成p115client/CloudDrive2实现115转存和磁力/ED2K离线下载",
     "labels": "资源,CloudDrive2,115,p115client",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "icon": "https://raw.githubusercontent.com/Li-Qifeng/MoviePilot-Plugins-Third/main/icons/nullbr_pro.png",
     "author": "Li-Qifeng",
     "level": 1,
@@ -26,7 +26,8 @@
       "v1.7.0": "新增按钮交互消息系统",
       "v1.8.0": "使用 /nullbr 命令启动搜索",
       "v1.9.0": "使用 # 前缀选择资源，避免与系统冲突",
-      "v2.0.0": "# 前缀支持搜索和交互，修复115转存，平台自适应帮助"
+      "v2.0.0": "# 前缀支持搜索和交互，修复115转存，平台自适应帮助",
+      "v2.0.1": "修复离线任务查询路径和进度显示"
     }
   }
 }
