@@ -1023,9 +1023,19 @@ class nullbr_search_pro(_PluginBase):
                 name = getattr(task, 'name', '未知')[:30] if hasattr(task, 'name') else str(task)[:30]
                 # percendDone 是 protobuf 中的实际字段名（注意拼写）
                 progress = getattr(task, 'percendDone', 0) if hasattr(task, 'percendDone') else 0
-                # 获取文件大小
+                # 获取文件大小并格式化
                 size_bytes = getattr(task, 'size', 0) if hasattr(task, 'size') else 0
-                size_str = self._format_size(size_bytes) if size_bytes > 0 else ""
+                if size_bytes > 0:
+                    if size_bytes >= 1024 ** 3:
+                        size_str = f"{size_bytes / (1024 ** 3):.2f}GB"
+                    elif size_bytes >= 1024 ** 2:
+                        size_str = f"{size_bytes / (1024 ** 2):.2f}MB"
+                    elif size_bytes >= 1024:
+                        size_str = f"{size_bytes / 1024:.2f}KB"
+                    else:
+                        size_str = f"{size_bytes}B"
+                else:
+                    size_str = ""
                 status_code = getattr(task, 'status', -1) if hasattr(task, 'status') else -1
                 
                 # 将状态码转换为可读文本
